@@ -17,12 +17,14 @@
 import argparse
 import sys
 
+from constraint_prog import uuv_design
+
 
 def run():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('command', help="""
-    test
+    uuv-test1, uuv-test2
     """)
     args = parser.parse_args(sys.argv[1:2])
 
@@ -30,8 +32,10 @@ def run():
     sys.argv[0] += ' ' + args.command
     args.command = args.command.replace('_', '-')
 
-    if args.command == 'test':
-        print("test")
+    if args.command == 'uuv-test1':
+        uuv_design.test1()
+    elif args.command == 'uuv-test2':
+        uuv_design.test2()
     else:
         parser.print_help()
 

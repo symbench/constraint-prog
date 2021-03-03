@@ -84,7 +84,7 @@ def newton_raphson(func: Callable, input_data: torch.tensor,
 
 class SympyFunc(object):
     """
-    A callable object created from a list of sympy symbolic expressions. 
+    A callable object created from a list of sympy symbolic expressions.
     The object can be called with a tensor of shape [*, input_size] and
     will produce a tensor of shape[*, output_size] where input_size is
     the number of symbols and output_size is the number of expressions.
@@ -106,10 +106,10 @@ class SympyFunc(object):
             self._add_input_names(arg)
 
     def __call__(self, input_data: torch.tensor) -> torch.tensor:
-        return self.evaluate(self.expressions, input_data)
+        return self.eval(self.expressions, input_data)
 
-    def evaluate(self, expressions: List[sympy.Expr],
-                 input_data: torch.tensor) -> torch.tensor:
+    def eval(self, expressions: List[sympy.Expr],
+             input_data: torch.tensor) -> torch.tensor:
         assert input_data.shape[-1] == len(self.input_names)
         self._input_data = input_data.unbind(dim=-1)
         output_data = []
@@ -154,9 +154,14 @@ class SympyFunc(object):
             return value
         elif expr.func == sympy.Pow:
             assert len(expr.args) == 2
-            value1 = self._eval(expr.args[0])
-            value2 = float(expr.args[1])
-            return torch.pow(value1, value2)
+            value0 = self._eval(expr.args[0])
+            value1 = float(expr.args[1])
+            return torch.pow(value0, value1)
+        elif expr.func == sympy.Eq:
+            assert len(expr.args) == 2
+            value0 = self._eval(expr.args[0])
+            value1 = self._eval(expr.args[1])
+            return torch.sub(value0, value1)
         elif expr.func == sympy.StrictLessThan:
             assert len(expr.args) == 2
             value1 = self._eval(expr.args[0])
@@ -165,7 +170,7 @@ class SympyFunc(object):
         elif expr.func == sympy.Piecewise:
             # the fallback case must be fully defined
             assert expr.args[-1][1].func == BooleanTrue
-            data = self._eval(expr.args[-1][0])
+            data = self._eval(expr.args[-1][0]).clone()
             for (a, b) in expr.args[-2::-1]:
                 a = self._eval(a)
                 b = self._eval(b)

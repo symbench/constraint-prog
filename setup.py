@@ -21,7 +21,7 @@ setup(
     version='0.1',
     packages=['constraint_prog'],
     license='GPL 3',
-    description="Tools for playing with contraint programming",
+    description="Contraint programming playground",
     long_description=open('README.md').read(),
     python_requires='>3.6',
     # do not list standard packages
