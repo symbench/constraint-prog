@@ -27,7 +27,8 @@ setup(
     # do not list standard packages
     install_requires=[
         'torch',
-        'matplotlib'
+        'matplotlib',
+        'sympy'
     ],
     entry_points={
         'console_scripts': [
