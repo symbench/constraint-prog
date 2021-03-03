@@ -17,7 +17,8 @@
 import torch
 import sympy
 
-from constraint_prog.newton_raphson import newton_raphson, SympyFunc
+from constraint_prog.newton_raphson import newton_raphson
+from constraint_prog.sympy_func import SympyFunc
 
 
 def test1():
@@ -33,8 +34,10 @@ def test1():
     inner_hull_diameter = sympy.Symbol("inner_hull_diamater")  # m
     outer_hull_diameter = sympy.Symbol("outer_hull_diameter")  # m
 
-    nominal_glide_speed = nominal_horizontal_speed / sympy.cos(glide_slope)  # m/s
-    nominal_vertical_speed = nominal_glide_speed * sympy.sin(glide_slope)  # m/s
+    nominal_glide_speed = nominal_horizontal_speed / \
+        sympy.cos(glide_slope)  # m/s
+    nominal_vertical_speed = nominal_glide_speed * \
+        sympy.sin(glide_slope)  # m/s
     nominal_dive_duration = 2.0 * dive_depth / nominal_vertical_speed  # s
     actual_dive_duration = 1.1 * nominal_dive_duration  # s
     horizontal_distance_per_dive = nominal_horizontal_speed * \
@@ -74,9 +77,10 @@ def test1():
     input_data = newton_raphson(func, input_data, num_iter=20)
     print(input_data)
     print(func(input_data))
-    print(func.eval([thin_hoop_coefficient], input_data))
-    # print(func.eval([thin_hoop_condition], input_data))
-    # print(func.eval([hoop_coefficient, maximum_hull_pressure], input_data))
+    print(func.evaluate([thin_hoop_coefficient], input_data))
+    # print(func.evaluate([thin_hoop_condition], input_data))
+    # print(func.evaluate(
+    #     [hoop_coefficient, maximum_hull_pressure], input_data))
 
 
 def test2():
@@ -109,7 +113,8 @@ def test2():
 
     maximum_hull_pressure = ocean_density * earth_gravitation * dive_depth  # in Pa
     maximum_hoop_stress = maximum_hull_pressure * hoop_coefficient  # CHECK THIS
-    hull_thickness_equation = sympy.Eq(maximum_hoop_stress * 1.25, yield_strength)
+    hull_thickness_equation = sympy.Eq(
+        maximum_hoop_stress * 1.25, yield_strength)
 
     func = SympyFunc([
         thin_hoop_equation,
@@ -126,7 +131,8 @@ def test2():
     print(input_data)
     output_data = func(input_data)
     print(output_data)
-    result_data = func.eval([inner_hull_diameter, hull_thickness, dive_depth], input_data)
+    result_data = func.evaluate(
+        [inner_hull_diameter, hull_thickness, dive_depth], input_data)
     result_data = torch.cat(
         (result_data, output_data.norm(dim=-1, keepdim=True)), dim=-1)
     print(result_data)
