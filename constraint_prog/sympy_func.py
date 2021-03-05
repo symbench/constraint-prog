@@ -35,6 +35,7 @@ class SympyFunc(object):
         for expr in expressions:
             self.add_input_symbols(expr)
         assert self.input_names
+        self.input_names = sorted(self.input_names)
         self._input_data = []
 
     def add_input_symbols(self, expr: sympy.Expr):
