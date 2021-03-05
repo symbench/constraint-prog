@@ -54,10 +54,13 @@ def pseudo_inverse(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor:
     """
     assert epsilon >= 0.0
     u, s, v = matrix.svd()
-    pos = s <= epsilon
-    s[pos] = 1.0
-    s = 1.0 / s
-    s[pos] = 0.0
+    if False:
+        pos = s <= epsilon
+        s[pos] = epsilon
+        s = 1.0 / s
+        s[pos] = 0.0
+    else:
+        s = 1.0 / torch.clamp(s, min=epsilon)
     a = torch.matmul(v, torch.diag_embed(s))
     return torch.matmul(a, u.transpose(-2, -1))
 
@@ -76,5 +79,13 @@ def newton_raphson(func: Callable, input_data: torch.tensor,
         jacobian_inv = pseudo_inverse(jacobian_data, epsilon=epsilon)
         update = torch.matmul(
             jacobian_inv, output_data.unsqueeze(dim=-1)).squeeze(-1)
-        input_data = input_data.detach() - update
+        input_data2 = input_data - update
+        if False:  # hack
+            output_data2 = func(input_data2)
+            input_data3 = input_data - 0.5 * update
+            output_data3 = func(input_data3)
+            better = output_data3.pow(2.0).sum(dim=-1) < \
+                output_data2.pow(2.0).sum(dim=-1)
+            input_data2[better] = input_data3[better]
+        input_data = input_data2
     return input_data

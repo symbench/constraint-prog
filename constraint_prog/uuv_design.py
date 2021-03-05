@@ -16,6 +16,7 @@
 
 import torch
 import sympy
+import matplotlib.pyplot as plt
 
 from constraint_prog.newton_raphson import newton_raphson
 from constraint_prog.sympy_func import SympyFunc
@@ -65,7 +66,7 @@ def test1():
 
     # print(sympy.srepr(thin_hoop_coefficient))
     func = SympyFunc([
-        # hull_thickness_equation,
+        hull_thickness_equation,
         # dive_depth - param1 ** 2,
         # 10 * hull_thickness - inner_hull_radius,
         thin_hoop_coefficient - 10,
@@ -136,3 +137,61 @@ def test2():
     result_data = torch.cat(
         (result_data, output_data.norm(dim=-1, keepdim=True)), dim=-1)
     print(result_data)
+
+
+def test3():
+    inner_hull_diameter = sympy.Symbol("inner_hull_diamater")  # m
+    outer_hull_diameter = sympy.Symbol("outer_hull_diameter")  # m
+
+    inner_hull_radius = 0.5 * inner_hull_diameter  # m
+    outer_hull_radius = 0.5 * outer_hull_diameter  # m
+    hull_thickness = outer_hull_radius - inner_hull_radius  # m
+
+    thin_hoop_coefficient = sympy.Symbol("thin_hoop_coefficient")
+    thin_hoop_equation = sympy.Eq(
+        thin_hoop_coefficient * hull_thickness, inner_hull_radius)
+    # thin_hoop_equation2 = sympy.Eq(
+    #     thin_hoop_coefficient, inner_hull_radius / hull_thickness)
+
+    thick_hoop_coefficient = sympy.Symbol("thick_hoop_coefficient")
+    thick_hoop_equation = sympy.Eq(
+        thick_hoop_coefficient *
+        (outer_hull_radius ** 2 - inner_hull_radius ** 2),
+        outer_hull_radius ** 2 + inner_hull_radius ** 2)
+
+    func = SympyFunc([
+        # thin_hoop_equation,
+        thick_hoop_equation,
+        sympy.Min(hull_thickness - 0.01, 0),
+        sympy.Min(inner_hull_diameter - 0.1, 0) +
+        sympy.Min(2.0 - inner_hull_diameter, 0),
+        sympy.Min(2.0 - outer_hull_diameter, 0),
+        sympy.Min(5.0 - thick_hoop_coefficient, 0),
+    ])
+    print(func.input_names)
+
+    input_data = torch.stack(torch.meshgrid(
+        torch.linspace(0.0, 2.0, 50),
+        torch.linspace(0.0, 2.0, 50),
+        torch.linspace(0.0, 5.0, 10)), dim=-1)
+    input_data2 = newton_raphson(func, input_data, num_iter=50, epsilon=0.1)
+    output_data2 = func(input_data2)
+    print((output_data2.norm(dim=-1) < 1e-5).sum())
+
+    input_data = input_data2 + torch.randn((50, 50, 10, 3)) * 0.5
+    input_data2 = newton_raphson(func, input_data, num_iter=20, epsilon=0.1)
+    output_data2 = func(input_data2)
+    print((output_data2.norm(dim=-1) < 1e-5).sum())
+
+    good_points = input_data2[output_data2.norm(dim=-1) < 0.001]
+    print(good_points.shape)
+
+    fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
+    ax1.scatter(
+        good_points[:, 0],
+        good_points[:, 1],
+        good_points[:, 2])
+    ax1.set_xlabel(func.input_names[0])
+    ax1.set_ylabel(func.input_names[1])
+    ax1.set_zlabel(func.input_names[2])
+    plt.show()

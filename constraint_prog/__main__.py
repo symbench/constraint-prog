@@ -36,6 +36,8 @@ def run():
         uuv_design.test1()
     elif args.command == 'uuv-test2':
         uuv_design.test2()
+    elif args.command == 'uuv-test3':
+        uuv_design.test3()
     else:
         parser.print_help()
 
