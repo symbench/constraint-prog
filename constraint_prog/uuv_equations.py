@@ -22,7 +22,7 @@ earth_gravitation = 9.80665  # in m/s^2
 buoyancy_engine_efficiency = 0.5
 
 glide_slope = sympy.Symbol("glide_slope")  # radians
-maximum_dive_depth = sympy.Symbol("maximum_dive_depth")  # m
+maximal_dive_depth = sympy.Symbol("maximal_dive_depth")  # m
 horizontal_distance = sympy.Symbol("horizontal_distance")  # m
 nominal_horizontal_speed = sympy.Symbol("nominal_horizontal_speed")  # m/s
 maximal_horizontal_speed = sympy.Symbol("nominal_horizontal_speed")  # m/s
@@ -37,7 +37,7 @@ nominal_glide_speed = nominal_horizontal_speed / sympy.cos(glide_slope)  # m/s
 nominal_vertical_speed = nominal_glide_speed * sympy.sin(glide_slope)  # m/s
 maximal_glide_speed = maximal_horizontal_speed / sympy.cos(glide_slope)  # m/s
 maximal_vertical_speed = maximal_glide_speed * sympy.sin(glide_slope)  # m/s
-nominal_dive_duration = 2.0 * maximum_dive_depth / nominal_vertical_speed  # s
+nominal_dive_duration = 2.0 * maximal_dive_depth / nominal_vertical_speed  # s
 actual_dive_duration = 1.1 * nominal_dive_duration  # s
 horizontal_distance_per_dive = nominal_horizontal_speed * \
     nominal_dive_duration  # m
@@ -59,11 +59,11 @@ hoop_coefficient = sympy.Piecewise(
     (thin_hoop_coefficient, thin_hoop_condition),
     (thick_hoop_coefficient, True))
 
-maximum_hull_pressure = ocean_density * \
-    earth_gravitation * maximum_dive_depth  # in Pa
-maximum_hoop_stress = maximum_hull_pressure * hoop_coefficient
+maximal_hull_pressure = ocean_density * \
+    earth_gravitation * maximal_dive_depth  # in Pa
+maximal_hoop_stress = maximal_hull_pressure * hoop_coefficient
 hull_thickness_equation = sympy.Eq(
-    maximum_hoop_stress * 1.25, hull_yield_strength)
+    maximal_hoop_stress * 1.25, hull_yield_strength)
 
 # calculate drag forces (step 4, page 19)
 
@@ -77,8 +77,18 @@ maximal_net_buoyancy = maximal_drag_force / sympy.sin(glide_slope)  # N
 
 # buoyancy calculation (step 5, page 23)
 
-maximum_buoyancy_equivalent_volume = 2.0 * maximal_net_buoyancy / \
-    (earth_gravitation * ocean_density)  # m^3
-nominal_buoyancy_equivalent_volume = 2.0 * nominal_net_buoyancy / \
-    (earth_gravitation * ocean_density)  # m^3
-buoyancy_reservoir_volume = maximum_buoyancy_equivalent_volume + 460e-6  # m^3
+maximal_buoyancy_equivalent_mass = 2.0 * maximal_net_buoyancy / \
+    earth_gravitation  # kg
+maximal_buoyancy_equivalent_volume = maximal_buoyancy_equivalent_mass / \
+    ocean_density  # m^3
+buoyancy_reservoir_volume = maximal_buoyancy_equivalent_volume + 460e-6  # m^3
+
+# total propulsion energy (step 6, page 24)
+
+nominal_buoyancy_equivalent_mass = 2.0 * nominal_net_buoyancy / \
+    earth_gravitation  # kg
+nominal_buoyancy_equivalent_volume = nominal_buoyancy_equivalent_mass / \
+    ocean_density  # m^3
+pump_energy_per_dive = 0.01 * nominal_buoyancy_equivalent_volume * \
+    maximal_dive_depth / buoyancy_engine_efficiency  # in J
+total_propulsion_energy = pump_energy_per_dive * dives_per_mission
