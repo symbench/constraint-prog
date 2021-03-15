@@ -12,3 +12,4 @@
 - https://arxiv.org/pdf/1806.00880.pdf
 - https://proceedings.neurips.cc/paper/2018/file/2b346a0aa375a07f5a90a344a61416c4-Reviews.html
 - http://proceedings.mlr.press/v119/tanielian20a.html
+- https://towardsdatascience.com/ai-feynman-2-0-learning-regression-equations-from-data-3232151bd929

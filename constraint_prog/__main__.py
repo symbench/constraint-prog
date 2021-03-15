@@ -17,7 +17,7 @@
 import argparse
 import sys
 
-from constraint_prog import uuv_design
+from constraint_prog import uuv_experiments
 
 
 def run():
@@ -33,11 +33,11 @@ def run():
     args.command = args.command.replace('_', '-')
 
     if args.command == 'uuv-test1':
-        uuv_design.test1()
+        uuv_experiments.test1()
     elif args.command == 'uuv-test2':
-        uuv_design.test2()
+        uuv_experiments.test2()
     elif args.command == 'uuv-test3':
-        uuv_design.test3()
+        uuv_experiments.test3()
     else:
         parser.print_help()
 
