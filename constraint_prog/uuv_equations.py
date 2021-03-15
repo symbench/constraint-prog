@@ -20,6 +20,10 @@ ocean_density = 1023.6  # in kg/m^3 for seawater
 hull_yield_strength = 34000.0 * 6894.7572932  # in Pa = N/m^2 = kg/ms^2
 earth_gravitation = 9.80665  # in m/s^2
 buoyancy_engine_efficiency = 0.5
+battery_cell_capacity = 40  # Wh
+battery_cell_diameter = 0.0332  # m
+battery_cell_length = 0.0615  # m
+battery_cell_weight = 0.180  # kg
 
 glide_slope = sympy.Symbol("glide_slope")  # radians
 maximal_dive_depth = sympy.Symbol("maximal_dive_depth")  # m
@@ -28,8 +32,14 @@ nominal_horizontal_speed = sympy.Symbol("nominal_horizontal_speed")  # m/s
 maximal_horizontal_speed = sympy.Symbol("nominal_horizontal_speed")  # m/s
 inner_hull_diameter = sympy.Symbol("inner_hull_diamater")  # m
 outer_hull_diameter = sympy.Symbol("outer_hull_diameter")  # m
+hull_length = sympy.Symbol("hull_length")  # m
 mission_duration = sympy.Symbol("mission_duration")  # s
+hotel_power = sympy.Symbol("hotel_power")  # W
+payload_power = sympy.Symbol("payload_power")  # W
 drag_coefficient = sympy.Symbol("drag_coefficient")
+fineness_ratio = sympy.Symbol("fineness_ratio")
+wetted_surface_coefficient = sympy.Symbol("wetted_surface_coefficient")
+prismatic_coefficient = sympy.Symbol("prismatic_coefficient")
 
 # mission duration equation (step 1, page 11)
 
@@ -44,6 +54,15 @@ horizontal_distance_per_dive = nominal_horizontal_speed * \
 dives_per_mission = horizontal_distance / horizontal_distance_per_dive
 mission_duration_equation = sympy.Eq(
     mission_duration, dives_per_mission * actual_dive_duration)  # s
+
+# hull size (step 2, page)
+
+hull_length_equation = sympy.Eq(
+    hull_length, fineness_ratio * outer_hull_diameter)
+wetted_surface = wetted_surface_coefficient * hull_length * \
+    sympy.pi * outer_hull_diameter
+hull_volume = prismatic_coefficient * hull_length * \
+    sympy.pi * 0.25 * outer_hull_diameter ** 2.0
 
 # hull thickness equation (step 3, page 15)
 
@@ -83,7 +102,7 @@ maximal_buoyancy_equivalent_volume = maximal_buoyancy_equivalent_mass / \
     ocean_density  # m^3
 buoyancy_reservoir_volume = maximal_buoyancy_equivalent_volume + 460e-6  # m^3
 
-# total propulsion energy (step 6, page 24)
+# energy requirements (step 6, page 24)
 
 nominal_buoyancy_equivalent_mass = 2.0 * nominal_net_buoyancy / \
     earth_gravitation  # kg
@@ -92,3 +111,15 @@ nominal_buoyancy_equivalent_volume = nominal_buoyancy_equivalent_mass / \
 pump_energy_per_dive = 0.01 * nominal_buoyancy_equivalent_volume * \
     maximal_dive_depth / buoyancy_engine_efficiency  # in J
 total_propulsion_energy = pump_energy_per_dive * dives_per_mission
+
+total_hotel_energy = hotel_power * mission_duration
+total_payload_energy = payload_power * mission_duration
+total_mission_energy = total_propulsion_energy + total_hotel_energy + \
+    total_payload_energy
+
+# energy storage (step 7, page 27)
+
+number_of_cells = total_mission_energy / 0.8 / battery_cell_capacity
+total_battery_weight = number_of_cells * battery_cell_weight  # kg
+total_battery_volume = number_of_cells * battery_cell_length * \
+    battery_cell_diameter * battery_cell_diameter * 1.5  # m^3 HACK
