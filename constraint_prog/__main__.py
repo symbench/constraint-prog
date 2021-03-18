@@ -17,14 +17,14 @@
 import argparse
 import sys
 
-from constraint_prog import uuv_experiments
+from constraint_prog import explorer, uuv_experiments
 
 
 def run():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('command', help="""
-    uuv-test1, uuv-test2
+    uuv-test1, uuv-test2, explore
     """)
     args = parser.parse_args(sys.argv[1:2])
 
@@ -38,6 +38,8 @@ def run():
         uuv_experiments.test2()
     elif args.command == 'uuv-test3':
         uuv_experiments.test3()
+    elif args.command == 'explore':
+        explorer.main(args=sys.argv[2:])
     else:
         parser.print_help()
 
