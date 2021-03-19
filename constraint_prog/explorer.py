@@ -23,6 +23,7 @@ import sys
 import sympy
 
 from constraint_prog import uuv_equations
+from constraint_prog.sympy_func import SympyFunc
 
 
 class Explorer:
@@ -30,33 +31,28 @@ class Explorer:
         with open(args.problem_json) as f:
             self.json_content = json.loads(f.read())
 
-        self.components = {
-            "symbols": [],
-            "eqns": [],
-            "constants": [],
-            "derived": []
-        }
+        self.equations = None
+        self.get_equations()
 
-        self.get_components()
-
-    def get_components(self):
+    def get_equations(self):
+        eqns = []
         if self.json_content["eqns"] == "uuv":
             members = getmembers(uuv_equations)
-            sympy_types = getmembers(sys.modules[sympy.__name__])
             for member in members:
-                member_val = member[1]
-                if type(member_val) in [typ[1] for typ in sympy_types]:
-                    if type(member_val) in [sympy.Symbol]:
-                        self.components["symbols"].append(member)
-                    elif type(member_val) not in [sympy.Eq]:
-                        self.components["derived"].append(member)
-                    else:
-                        self.components["eqns"].append(member)
-                elif type(member_val) in [int, float]:
-                    self.components["constants"].append(member)
+                if isinstance(member[1], sympy.Eq):
+                    eqns.append("uuv_equations." + member[0])
+            eqns_str = eqns[0]
+            for eqn_str in eqns[1:]:
+                eqns_str += (', ' + eqn_str)
+            self.equations = eval('[' + eqns_str + ']')
+
+            # Alternative way: direct construction by name
+            # from uuv_equations import hull_length_equation, hull_thickness_equation, mission_duration_equation
+            # self.equations = [hull_length_equation, hull_thickness_equation, mission_duration_equation]
 
     def run(self):
-        print("run")
+        func = SympyFunc(self.equations)
+        print(func.input_names)
 
 
 def main(args=None):
@@ -67,6 +63,14 @@ def main(args=None):
     parser.add_argument('--output-dir', metavar='DIR', type=str,
                         default=os.getcwd(),
                         help='Path to output directory')
+    parser.add_argument('--cuda', action='store_true',
+                        help='Flag for enabling CUDA for calculations')
+    parser.add_argument('--iter', type=int,
+                        default=10,
+                        help='Number of iterations in the solver')
+    parser.add_argument('--max-points', type=int,
+                        default=1000,
+                        help='Maximal number of points generated for exploration')
     args = parser.parse_args(args)
 
     explorer = Explorer(args=args)
