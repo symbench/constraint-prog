@@ -19,7 +19,8 @@ from typing import Callable
 import torch
 
 
-def gradient_descent(f: Callable, in_data: torch.Tensor, it: int) -> torch.Tensor:
+def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
+                     lrate: float, device: torch.device) -> torch.Tensor:
     """
     Calculates 'it' many iterations of the vanilla gradient descent method.
     The input_data must of shape [*, input_size]. The func
@@ -28,8 +29,6 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int) -> torch.Tenso
     The returned tensor is of shape [*, input_size].
     """
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    learning_rate = 0.01
     inp_data = torch.clone(
         in_data.reshape(-1, in_data.shape[-1]).to(device)
     )
@@ -42,7 +41,7 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int) -> torch.Tenso
             grad_outputs=torch.ones(inp_data.shape[0]).to(device)
         )[0]
         with torch.no_grad():
-            inp_data -= learning_rate * inp_data.grad
+            inp_data -= lrate * inp_data.grad
         inp_data.grad.zero_()
 
     return inp_data.cpu().detach().reshape(in_data.shape)
