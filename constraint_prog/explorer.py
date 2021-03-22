@@ -19,11 +19,14 @@ from inspect import getmembers
 import json
 import os
 
+import numpy as np
 import sympy
 import torch
 
 from constraint_prog import uuv_equations
 from constraint_prog.sympy_func import SympyFunc
+from constraint_prog.gradient_descent import gradient_descent
+from constraint_prog.newton_raphson import newton_raphson
 
 
 class Explorer:
@@ -32,6 +35,12 @@ class Explorer:
         self.max_points = args.max_points
         self.n_iter = args.iter
         self.output_dir = args.output_dir
+        self.method = args.method
+
+        if self.method == "newton":
+            self.eps = args.eps
+        elif self.method == 'gradient':
+            self.learning_rate = args.lrate
 
         with open(args.problem_json) as f:
             self.json_content = json.loads(f.read())
@@ -66,19 +75,21 @@ class Explorer:
         func = SympyFunc(self.equations)
         device = torch.device("cuda:0" if torch.cuda.is_available() and self.is_cuda_used else "cpu")
         input_data = self.get_sample(func).to(device)
+        output_data = None
+        if self.method == "newton":
+            output_data = newton_raphson(func=func, input_data=input_data,
+                                         num_iter=self.n_iter, epsilon=self.eps)
+        elif self.method == "gradient":
+            output_data = gradient_descent(f=func, in_data=input_data,
+                                           it=self.n_iter, lrate=self.learning_rate,
+                                           device=device)
+        file_name = os.path.join(os.path.abspath(self.output_dir), "output_data.npz")
+        np.savez_compressed(file_name,
+                            data=output_data)
 
     def get_sample(self, func):
-        # Sample from N(0,1)
-        sample = torch.normal(mean=0.0, std=1.0, size=(self.max_points, func.input_size))
-        sample_min = torch.min(sample, dim=0, keepdim=True)[0]
-        sample_max = torch.max(sample, dim=0, keepdim=True)[0]
-        sample -= sample_min
-        sample *= ((self.input_max - self.input_min) / (sample_max - sample_min))
-
-        sample /= self.input_res
-        sample = sample.to(int).to(float)
-        sample *= self.input_res
-
+        sample = torch.rand(size=(self.max_points, func.input_size))
+        sample *= (self.input_max - self.input_min)
         sample += self.input_min
         return sample
 
@@ -88,6 +99,9 @@ def main(args=None):
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('problem_json', type=str,
                         help='Path to the problem JSON file used for exploration')
+    parser.add_argument('method', type=str,
+                        choices=["gradient", "newton"],
+                        help='Method to run')
     parser.add_argument('--output-dir', metavar='DIR', type=str,
                         default=os.getcwd(),
                         help='Path to output directory')
@@ -99,6 +113,12 @@ def main(args=None):
     parser.add_argument('--max-points', type=int,
                         default=1000,
                         help='Maximal number of points generated for exploration')
+    parser.add_argument('--eps', type=int,
+                        default=0.1,
+                        help='Epsilon value for Newton-Raphson method')
+    parser.add_argument('--lrate', type=int,
+                        default=0.1,
+                        help='Learning rate value for gradient descent method')
     args = parser.parse_args(args)
 
     explorer = Explorer(args=args)
