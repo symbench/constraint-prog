@@ -101,10 +101,9 @@ class Explorer:
         print("After checking with {} tolerance we have {} designs".format(
             self.tolerance, output_data.shape[0]))
 
-        if False:
-            output_data = self.remove_close_points(output_data)
-            print("After pruning with {} tolerance we have {} designs".format(
-                self.tolerance, output_data.shape[0]))
+        output_data = self.prune_close_points2(output_data)
+        print("After pruning close points we have {} designs".format(
+            output_data.shape[0]))
 
         file_name = os.path.join(os.path.abspath(
             self.output_dir), "output_data.npz")
@@ -132,7 +131,7 @@ class Explorer:
         good_point_idx = torch.norm(equation_output, dim=1) < self.tolerance
         return samples[good_point_idx]
 
-    def remove_close_points(self, output_data: torch.tensor):
+    def prune_close_points(self, output_data: torch.tensor):
         output_data_tile = torch.tile(
             output_data, (output_data.shape[0], 1, 1))
         output_data_1kn = output_data.reshape(
@@ -157,6 +156,26 @@ class Explorer:
 
         # TODO: from close and different point sets remove all except one
         return output_data
+
+    def prune_close_points2(self, samples: torch.tensor):
+        assert samples.ndim == 2 and samples.shape[1] == len(self.input_res)
+        rounded = samples / self.input_res.reshape((1, samples.shape[1]))
+        rounded = rounded.round().type(torch.int64)
+
+        # hash based filtering is not unique, but good enough
+        randcoef = torch.randint(-10000000, 10000000, (1, samples.shape[1]))
+        hashnums = (rounded * randcoef).sum(dim=1)
+
+        # this is slow, but good enough
+        selected = torch.zeros(samples.shape[0], dtype=bool)
+        hashset = set()
+        for idx in range(samples.shape[0]):
+            value = int(hashnums[idx])
+            if value not in hashset:
+                hashset.add(value)
+                selected[idx] = True
+
+        return samples[selected]
 
 
 def main(args=None):
