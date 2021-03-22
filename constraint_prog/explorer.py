@@ -17,6 +17,7 @@
 import argparse
 from typing import Callable
 from inspect import getmembers
+import importlib.util
 import json
 import os
 
@@ -24,7 +25,6 @@ import numpy as np
 import sympy
 import torch
 
-from constraint_prog import uuv_equations
 from constraint_prog.sympy_func import SympyFunc
 from constraint_prog.gradient_descent import gradient_descent
 from constraint_prog.newton_raphson import newton_raphson
@@ -39,6 +39,7 @@ class Explorer:
         self.n_iter = n_iter
         self.output_dir = output_dir
         self.method = method
+        self.problem_json = problem_json
 
         if self.method == "newton":
             self.eps = newton_eps
@@ -62,18 +63,26 @@ class Explorer:
         self.tolerance = self.json_content["eps"]
 
     def get_equations(self):
-        eqns = []
-        if self.json_content["eqns"] == "uuv":
-            members = getmembers(uuv_equations)
-            for member in members:
-                if isinstance(member[1], sympy.Eq):
-                    eqns.append("uuv_equations." + member[0])
-            eqns_str = ', '.join(eqns)
-            self.equations = eval('[' + eqns_str + ']')
+        path = os.path.join(
+            os.path.dirname(self.problem_json), self.json_content["source"])
+        print("Loading python file:", path)
+        if not os.path.exists(path):
+            raise FileNotFoundError()
 
-            # Alternative way: direct construction by name
-            # from uuv_equations import hull_length_equation, hull_thickness_equation, mission_duration_equation
-            # self.equations = [hull_length_equation, hull_thickness_equation, mission_duration_equation]
+        spec = importlib.util.spec_from_file_location("equmod", path)
+        equmod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(equmod)
+        members = getmembers(equmod)
+
+        self.equations = []
+        for name in self.json_content["equations"]:
+            for member in members:
+                if member[0] == name:
+                    assert isinstance(member[1], sympy.Eq)
+                    self.equations.append(member[1])
+                    break
+            else:
+                raise ValueError("equation " + name + " not found")
 
     def print_equations(self):
         print("Loaded equations:")
