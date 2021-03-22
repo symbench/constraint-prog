@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+from typing import Callable
 from inspect import getmembers
 import json
 import os
@@ -77,8 +78,10 @@ class Explorer:
         func = SympyFunc(self.equations)
         device = torch.device(
             "cuda:0" if torch.cuda.is_available() and self.is_cuda_used else "cpu")
-        input_data = self.get_sample(func).to(device)
+        input_data = self.generate_input(func).to(device)
 
+        print("Running {} method on {} many design points".format(
+            self.method, input_data.shape[0]))
         output_data = None
         if self.method == "newton":
             output_data = newton_raphson(func=func, input_data=input_data,
@@ -87,12 +90,15 @@ class Explorer:
             output_data = gradient_descent(f=func, in_data=input_data,
                                            it=self.n_iter, lrate=self.learning_rate,
                                            device=device)
-        is_output_checked = True
-        if is_output_checked:
+
+        check_tolerance = True
+        if check_tolerance:
             equation_output = func(output_data)
             good_point_idx = torch.sum(
                 equation_output.pow(2.0), dim=1) < self.tolerance
             output_data = output_data[good_point_idx]
+            print("After checking with {} tolerance we have {} designs".format(
+                self.tolerance, output_data.shape[0]))
 
         are_close_points_filtered = False
         if are_close_points_filtered:
@@ -122,15 +128,15 @@ class Explorer:
 
         file_name = os.path.join(os.path.abspath(
             self.output_dir), "output_data.npz")
-        np.savez_compressed(file_name,
-                            data=output_data)
+        print("Saving generated design points to:", file_name)
+        np.savez_compressed(file_name, data=output_data)
         # self.load_npz(file_name)
 
-    def load_npz(self, file_name):
+    def load_npz(self, file_name: str):
         saved_out = np.load(file_name)["data"]
         print(saved_out.shape)
 
-    def get_sample(self, func):
+    def generate_input(self, func: Callable):
         sample = torch.rand(size=(self.max_points, func.input_size))
         sample *= (self.input_max - self.input_min)
         sample += self.input_min
@@ -142,25 +148,20 @@ def main(args=None):
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('problem_json', type=str,
                         help='Path to the problem JSON file used for exploration')
-    parser.add_argument('method', type=str,
-                        choices=["gradient", "newton"],
-                        help='Method to run')
+    parser.add_argument('--method', type=str, choices=["gradient", "newton"],
+                        default="newton", help='Method to run')
     parser.add_argument('--output-dir', metavar='DIR', type=str,
                         default=os.getcwd(),
                         help='Path to output directory')
     parser.add_argument('--cuda', action='store_true',
                         help='Flag for enabling CUDA for calculations')
-    parser.add_argument('--iter', type=int,
-                        default=10,
+    parser.add_argument('--iter', type=int, metavar='NUM', default=10,
                         help='Number of iterations in the solver')
-    parser.add_argument('--max-points', type=int,
-                        default=1000,
+    parser.add_argument('--max-points', type=int, metavar='NUM', default=1000,
                         help='Maximal number of points generated for exploration')
-    parser.add_argument('--eps', type=float,
-                        default=0.1,
+    parser.add_argument('--eps', type=float, metavar='NUM', default=0.1,
                         help='Epsilon value for Newton-Raphson method')
-    parser.add_argument('--lrate', type=int,
-                        default=0.1,
+    parser.add_argument('--lrate', type=int, metavar='NUM', default=0.1,
                         help='Learning rate value for gradient descent method')
     args = parser.parse_args(args)
 
