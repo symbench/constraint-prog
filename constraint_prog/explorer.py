@@ -99,11 +99,13 @@ class Explorer:
             output_data_k1n = output_data.reshape((output_data.shape[0], 1, output_data.shape[1]))
             output_data_compare = output_data_1kn ** 2 - 2 * output_data_tile * output_data_k1n + output_data_k1n ** 2
 
-            comparison = output_data_compare > (self.input_res.reshape((1, 1, self.input_res.shape[0])) ** 2)
+            comparison = torch.tensor(
+                output_data_compare > (self.input_res.reshape((1, 1, self.input_res.shape[0])) ** 2)
+            )
             difference_matrix = torch.sum(comparison.to(int), dim=2)
             indices = np.array([[(i, j) for j in range(output_data.shape[0])] for i in range(output_data.shape[0])])
 
-            close_points_bool_idx = (difference_matrix == 0)
+            close_points_bool_idx = torch.tensor(difference_matrix == 0)
             close_point_idx = indices[close_points_bool_idx.numpy()]
             close_and_different_points_idx = indices[close_point_idx[:, 0] != close_point_idx[:, 1]]
 
