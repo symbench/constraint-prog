@@ -49,11 +49,11 @@ class Explorer:
 
         constraints = self.json_content["constraints"]
         self.input_min = torch.Tensor([[constraints[x]["min"]
-                                       for x in sorted(constraints.keys())]])
+                                        for x in sorted(constraints.keys())]])
         self.input_max = torch.Tensor([[constraints[x]["max"]
-                                       for x in sorted(constraints.keys())]])
+                                        for x in sorted(constraints.keys())]])
         self.input_res = torch.Tensor([constraints[x]["resolution"]
-                                      for x in sorted(constraints.keys())])
+                                       for x in sorted(constraints.keys())])
 
         self.tolerance = self.json_content["eps"]
 
@@ -75,7 +75,8 @@ class Explorer:
 
     def run(self):
         func = SympyFunc(self.equations)
-        device = torch.device("cuda:0" if torch.cuda.is_available() and self.is_cuda_used else "cpu")
+        device = torch.device(
+            "cuda:0" if torch.cuda.is_available() and self.is_cuda_used else "cpu")
         input_data = self.get_sample(func).to(device)
 
         output_data = None
@@ -89,29 +90,38 @@ class Explorer:
         is_output_checked = True
         if is_output_checked:
             equation_output = func(output_data)
-            good_point_idx = torch.sum(equation_output.pow(2.0), dim=1) < self.tolerance
+            good_point_idx = torch.sum(
+                equation_output.pow(2.0), dim=1) < self.tolerance
             output_data = output_data[good_point_idx]
 
         are_close_points_filtered = False
         if are_close_points_filtered:
-            output_data_tile = torch.tile(output_data, (output_data.shape[0], 1, 1))
-            output_data_1kn = output_data.reshape((1, output_data.shape[0], output_data.shape[1]))
-            output_data_k1n = output_data.reshape((output_data.shape[0], 1, output_data.shape[1]))
-            output_data_compare = output_data_1kn ** 2 - 2 * output_data_tile * output_data_k1n + output_data_k1n ** 2
+            output_data_tile = torch.tile(
+                output_data, (output_data.shape[0], 1, 1))
+            output_data_1kn = output_data.reshape(
+                (1, output_data.shape[0], output_data.shape[1]))
+            output_data_k1n = output_data.reshape(
+                (output_data.shape[0], 1, output_data.shape[1]))
+            output_data_compare = output_data_1kn ** 2 - 2 * \
+                output_data_tile * output_data_k1n + output_data_k1n ** 2
 
             comparison = torch.tensor(
-                output_data_compare > (self.input_res.reshape((1, 1, self.input_res.shape[0])) ** 2)
+                output_data_compare > (self.input_res.reshape(
+                    (1, 1, self.input_res.shape[0])) ** 2)
             )
             difference_matrix = torch.sum(comparison.to(int), dim=2)
-            indices = np.array([[(i, j) for j in range(output_data.shape[0])] for i in range(output_data.shape[0])])
+            indices = np.array([[(i, j) for j in range(output_data.shape[0])]
+                                for i in range(output_data.shape[0])])
 
             close_points_bool_idx = torch.tensor(difference_matrix == 0)
             close_point_idx = indices[close_points_bool_idx.numpy()]
-            close_and_different_points_idx = indices[close_point_idx[:, 0] != close_point_idx[:, 1]]
+            close_and_different_points_idx = indices[close_point_idx[:, 0]
+                                                     != close_point_idx[:, 1]]
 
             # TODO: from close and different point sets remove all except one
 
-        file_name = os.path.join(os.path.abspath(self.output_dir), "output_data.npz")
+        file_name = os.path.join(os.path.abspath(
+            self.output_dir), "output_data.npz")
         np.savez_compressed(file_name,
                             data=output_data)
         # self.load_npz(file_name)
