@@ -55,6 +55,8 @@ class Explorer:
         self.input_res = torch.Tensor([[constraints[x]["resolution"]
                                        for x in sorted(constraints.keys())]])
 
+        self.tolerance = self.json_content["eps"]
+
     def get_equations(self):
         eqns = []
         if self.json_content["eqns"] == "uuv":
@@ -75,6 +77,7 @@ class Explorer:
         func = SympyFunc(self.equations)
         device = torch.device("cuda:0" if torch.cuda.is_available() and self.is_cuda_used else "cpu")
         input_data = self.get_sample(func).to(device)
+
         output_data = None
         if self.method == "newton":
             output_data = newton_raphson(func=func, input_data=input_data,
@@ -83,6 +86,12 @@ class Explorer:
             output_data = gradient_descent(f=func, in_data=input_data,
                                            it=self.n_iter, lrate=self.learning_rate,
                                            device=device)
+        is_output_checked = True
+        if is_output_checked:
+            equation_output = func(output_data)
+            good_point_idx = torch.sum(equation_output.pow(2.0), dim=1) < self.tolerance
+            output_data = output_data[good_point_idx]
+
         file_name = os.path.join(os.path.abspath(self.output_dir), "output_data.npz")
         np.savez_compressed(file_name,
                             data=output_data)
