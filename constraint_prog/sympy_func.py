@@ -64,9 +64,9 @@ class SympyFunc(object):
 
     def _eval(self, expr: sympy.Expr) -> torch.tensor:
         if (expr.func == sympy.Integer or expr.func == sympy.Float
-                or expr.func == sympy.numbers.NegativeOne
-                or expr.func == sympy.numbers.Zero
-                or expr.func == sympy.numbers.One):
+                or expr.func == sympy.core.numbers.NegativeOne
+                or expr.func == sympy.core.numbers.Zero
+                or expr.func == sympy.core.numbers.One):
             return torch.full(self._input_data[0].shape, float(expr))
         elif expr.func == sympy.Symbol:
             return self._input_data[self.input_names.index(expr.name)]
@@ -111,6 +111,11 @@ class SympyFunc(object):
             value1 = self._eval(expr.args[0])
             value2 = self._eval(expr.args[1])
             return value1 < value2
+        elif expr.func == sympy.StrictGreaterThan:
+            assert len(expr.args) == 2
+            value1 = self._eval(expr.args[0])
+            value2 = self._eval(expr.args[1])
+            return value1 > value2
         elif expr.func == sympy.Piecewise:
             # the fallback case must be fully defined
             assert expr.args[-1][1].func == BooleanTrue
