@@ -86,6 +86,11 @@ class Explorer:
         file_name = os.path.join(os.path.abspath(self.output_dir), "output_data.npz")
         np.savez_compressed(file_name,
                             data=output_data)
+        # self.load_npz(file_name)
+
+    def load_npz(self, file_name):
+        saved_out = np.load(file_name)["data"]
+        print(saved_out.shape)
 
     def get_sample(self, func):
         sample = torch.rand(size=(self.max_points, func.input_size))
