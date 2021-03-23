@@ -111,11 +111,21 @@ class SympyFunc(object):
             value1 = self._eval(expr.args[0])
             value2 = self._eval(expr.args[1])
             return value1 < value2
+        elif expr.func == sympy.LessThan:
+            assert len(expr.args) == 2
+            value1 = self._eval(expr.args[0])
+            value2 = self._eval(expr.args[1])
+            return value1 <= value2
         elif expr.func == sympy.StrictGreaterThan:
             assert len(expr.args) == 2
             value1 = self._eval(expr.args[0])
             value2 = self._eval(expr.args[1])
             return value1 > value2
+        elif expr.func == sympy.GreaterThan:
+            assert len(expr.args) == 2
+            value1 = self._eval(expr.args[0])
+            value2 = self._eval(expr.args[1])
+            return value1 >= value2
         elif expr.func == sympy.Piecewise:
             # the fallback case must be fully defined
             assert expr.args[-1][1].func == BooleanTrue
