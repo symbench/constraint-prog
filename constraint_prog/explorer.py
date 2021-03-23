@@ -54,13 +54,22 @@ class Explorer:
             self.json_content = json.loads(f.read())
         self.equations = None
         self.get_equations()
-        self.func = SympyFunc(self.equations)
-        # print(self.func.input_names)
 
         constraints = self.json_content["constraints"]
         # disregard entries that start with a dash
         constraints = {key: val for (key, val) in constraints.items()
                        if not key.startswith('-')}
+
+        fixed_values = {key: val["min"] for (key, val) in constraints.items()
+                        if val["min"] == val["max"]}
+        for (key, val) in fixed_values.items():
+            print("Fixing {} to {}".format(key, val))
+            self.equations = [equ.subs(sympy.Symbol(key), val)
+                              for equ in self.equations]
+            del constraints[key]
+
+        self.func = SympyFunc(self.equations)
+        # print(self.func.input_names)
 
         assert sorted(constraints.keys()) == self.func.input_names
 
