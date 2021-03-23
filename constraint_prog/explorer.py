@@ -144,10 +144,9 @@ class Explorer:
         print("After pruning close points we have {} designs".format(
             output_data.shape[0]))
 
-        if False:
-            output_data = self.prune_bounding_box(output_data)
-            print("After bounding box pruning we have {} designs".format(
-                output_data.shape[0]))
+        output_data = self.prune_bounding_box(output_data)
+        print("After bounding box pruning we have {} designs".format(
+            output_data.shape[0]))
 
         self.save_data(output_data)
 
