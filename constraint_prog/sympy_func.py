@@ -108,6 +108,26 @@ class SympyFunc(object):
             assert len(expr.args) == 1
             value0 = self._eval(expr.args[0])
             return torch.log(value0)
+        elif expr.func == sympy.sin:
+            assert len(expr.args) == 1
+            value0 = self._eval(expr.args[0])
+            return torch.sin(value0)
+        elif expr.func == sympy.cos:
+            assert len(expr.args) == 1
+            value0 = self._eval(expr.args[0])
+            return torch.cos(value0)
+        elif expr.func == sympy.tan:
+            assert len(expr.args) == 1
+            value0 = self._eval(expr.args[0])
+            return torch.tan(value0)
+        elif expr.func == sympy.sqrt:
+            assert len(expr.args) == 1
+            value0 = self._eval(expr.args[0])
+            return torch.sqrt(value0)
+        elif expr.func == sympy.exp:
+            assert len(expr.args) == 1
+            value0 = self._eval(expr.args[0])
+            return torch.exp(value0)
         elif expr.func == sympy.Eq:
             assert len(expr.args) == 2
             value0 = self._eval(expr.args[0])
