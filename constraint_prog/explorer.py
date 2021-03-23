@@ -157,7 +157,7 @@ class Explorer:
         file_name = os.path.join(os.path.abspath(self.output_dir), filename)
         print("Saving generated design points to:", file_name)
         if self.to_csv:
-            with open(filename, 'w') as f:
+            with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(self.func.input_names)
                 writer.writerows(samples.numpy())
