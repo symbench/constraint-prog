@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2021, Zsolt Vizi
+# Copyright (C) 2021, Zsolt Vizi, Miklos Maroti
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -51,8 +51,13 @@ class Explorer:
         self.equations = None
         self.get_equations()
         self.func = SympyFunc(self.equations)
+        # print(self.func.input_names)
 
         constraints = self.json_content["constraints"]
+        # disregard entries that start with a dash
+        constraints = {key: val for (key, val) in constraints.items()
+                       if not key.startswith('-')}
+
         assert sorted(constraints.keys()) == self.func.input_names
 
         self.input_min = torch.Tensor([[constraints[var]["min"]
@@ -78,6 +83,9 @@ class Explorer:
 
         self.equations = []
         for name in self.json_content["equations"]:
+            # disregard entries that start with a dash
+            if name.startswith('-'):
+                continue
             for member in members:
                 if member[0] == name:
                     assert isinstance(member[1], sympy.Eq)
@@ -119,6 +127,11 @@ class Explorer:
         output_data = self.prune_close_points2(output_data)
         print("After pruning close points we have {} designs".format(
             output_data.shape[0]))
+
+        if False:
+            output_data = self.prune_bounding_box(output_data)
+            print("After bounding box pruning we have {} designs".format(
+                output_data.shape[0]))
 
         file_name = os.path.join(os.path.abspath(
             self.output_dir), "output_data.npz")
@@ -193,7 +206,11 @@ class Explorer:
         return samples[selected]
 
     def prune_bounding_box(self, samples: torch.tensor):
-        pass
+        assert samples.ndim == 2
+        selected = torch.logical_and(samples >= self.input_min,
+                                     samples <= self.input_max)
+        selected = selected.all(dim=1)
+        return samples[selected]
 
 
 def main(args=None):
