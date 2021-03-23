@@ -134,9 +134,12 @@ class Explorer:
                 output_data.shape[0]))
 
         file_name = os.path.join(os.path.abspath(
-            self.output_dir), "output_data.npz")
+            self.output_dir),
+            os.path.splitext(os.path.basename(self.problem_json))[0] + ".npz")
         print("Saving generated design points to:", file_name)
-        np.savez_compressed(file_name, data=output_data)
+        np.savez_compressed(file_name,
+                            names=self.func.input_names,
+                            points=output_data)
         # self.load_npz(file_name)
 
     def load_npz(self, file_name: str):
