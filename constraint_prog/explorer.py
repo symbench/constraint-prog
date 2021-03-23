@@ -15,10 +15,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import csv
 from inspect import getmembers
 import importlib.util
 import json
 import os
+from typing import List
 
 import numpy as np
 import sympy
@@ -31,12 +33,14 @@ from constraint_prog.newton_raphson import newton_raphson
 
 class Explorer:
     def __init__(self, problem_json: str, output_dir: str,
-                 cuda_enable: bool, max_points: int, method: str,
+                 cuda_enable: bool, to_csv: bool,
+                 max_points: int, method: str,
                  newton_eps: float, newton_iter: int,
                  gradient_lr: float, gradient_iter: int):
         self.problem_json = problem_json
         self.output_dir = output_dir
         self.cuda_enable = cuda_enable
+        self.to_csv = to_csv
         self.max_points = max_points
         self.method = method
 
@@ -133,18 +137,22 @@ class Explorer:
             print("After bounding box pruning we have {} designs".format(
                 output_data.shape[0]))
 
-        file_name = os.path.join(os.path.abspath(
-            self.output_dir),
-            os.path.splitext(os.path.basename(self.problem_json))[0] + ".npz")
-        print("Saving generated design points to:", file_name)
-        np.savez_compressed(file_name,
-                            names=self.func.input_names,
-                            points=output_data)
-        # self.load_npz(file_name)
+        self.save_data(output_data)
 
-    def load_npz(self, file_name: str):
-        saved_out = np.load(file_name)["data"]
-        print(saved_out.shape)
+    def save_data(self, samples: torch.tensor) -> None:
+        filename = os.path.splitext(os.path.basename(self.problem_json))[0] + \
+            (".csv" if self.to_csv else ".npz")
+        file_name = os.path.join(os.path.abspath(self.output_dir), filename)
+        print("Saving generated design points to:", file_name)
+        if self.to_csv:
+            with open(filename, 'w') as f:
+                writer = csv.writer(f)
+                writer.writerow(self.func.input_names)
+                writer.writerows(samples.numpy())
+        else:
+            np.savez_compressed(file_name,
+                                sample_vars=self.func.input_names,
+                                sample_data=samples)
 
     def generate_input(self):
         """Generates input data with uniform distribution."""
@@ -240,10 +248,13 @@ def main(args=None):
                         help='Number of iterations for the gradient method')
     parser.add_argument('--print-equs', action='store_true',
                         help='Print the loaded equations')
+    parser.add_argument('--csv', action='store_true',
+                        help='Store samples into .csv (instead of .npz)')
     args = parser.parse_args(args)
 
     explorer = Explorer(problem_json=args.problem_json,
                         cuda_enable=args.cuda,
+                        to_csv=args.csv,
                         max_points=args.max_points,
                         output_dir=args.output_dir,
                         method=args.method,
