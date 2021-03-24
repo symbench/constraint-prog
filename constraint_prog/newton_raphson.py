@@ -33,12 +33,13 @@ def jacobian(func: Callable, input_data: torch.tensor) -> torch.tensor:
     input_data.requires_grad = True
     output_data = func(input_data)
     jacobian_data = torch.empty(
-        (input_data.shape[0], output_data.shape[1], input_data.shape[1]))
+        (input_data.shape[0], output_data.shape[1], input_data.shape[1]),
+        device=input_data.device)
     for i in range(output_data.shape[1]):
         jacobian_data[:, i, :] = torch.autograd.grad(
             output_data[:, i],
             input_data,
-            torch.ones(input_data.shape[0]),
+            torch.ones(input_data.shape[0], device=input_data.device),
             retain_graph=i + 1 < output_data.shape[1])[0]
     output_data = output_data.reshape(shape[:-1] + output_data.shape[-1:])
     jacobian_data = jacobian_data.reshape(
@@ -46,7 +47,7 @@ def jacobian(func: Callable, input_data: torch.tensor) -> torch.tensor:
     return output_data.detach(), jacobian_data.detach()
 
 
-def pseudo_inverse(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor:
+def pseudo_inverse1(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor:
     """
     Takes a tensor of shape [*, rows, cols] and returns a tensor of shape
     [*, cols, rows]. Only the singular values above epsilon are inverted,
@@ -65,6 +66,33 @@ def pseudo_inverse(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor:
     return torch.matmul(a, u.transpose(-2, -1))
 
 
+def pseudo_inverse2(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor:
+    """
+    Takes a tensor of shape [*, rows, cols] and returns a tensor of shape
+    [*, cols, rows].
+    """
+    assert epsilon >= 0.0
+    device = matrix.device
+
+    # SVD is really slow on CUDA, do it on the CPU
+    if device == "cuda":
+        matrix = matrix.cpu()
+
+    u, s, v = torch.linalg.svd(matrix, full_matrices=False, compute_uv=True)
+
+    if device == "cuda":
+        u = u.to(device)
+        s = s.to(device)
+        v = v.to(device)
+
+    s = 1.0 / torch.clamp(s, min=epsilon)
+    s = torch.diag_embed(s)
+    a = torch.matmul(v.transpose(-2, -1), s)
+    b = torch.matmul(a, u.transpose(-2, -1))
+
+    return b
+
+
 def newton_raphson(func: Callable, input_data: torch.tensor,
                    num_iter: int = 10, epsilon: float = 1e-3) -> torch.tensor:
     """
@@ -76,7 +104,7 @@ def newton_raphson(func: Callable, input_data: torch.tensor,
     """
     for _ in range(num_iter):
         output_data, jacobian_data = jacobian(func, input_data)
-        jacobian_inv = pseudo_inverse(jacobian_data, epsilon=epsilon)
+        jacobian_inv = pseudo_inverse2(jacobian_data, epsilon=epsilon)
         update = torch.matmul(
             jacobian_inv, output_data.unsqueeze(dim=-1)).squeeze(-1)
         input_data2 = input_data - update

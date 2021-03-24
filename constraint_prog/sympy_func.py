@@ -29,8 +29,10 @@ class SympyFunc(object):
     the number of symbols and output_size is the number of expressions.
     """
 
-    def __init__(self, expressions: List[sympy.Expr]):
+    def __init__(self, expressions: List[sympy.Expr], device=None):
         self.expressions = expressions
+        self.device = device
+
         self.input_names = []
         for expr in expressions:
             self.add_input_symbols(expr)
@@ -70,11 +72,13 @@ class SympyFunc(object):
                 or expr.func == sympy.core.numbers.One
                 or expr.func == sympy.core.numbers.Pi
                 or expr.func == sympy.core.numbers.Half):
-            return torch.full(self._input_data[0].shape, float(expr))
+            return torch.full(self._input_data[0].shape, float(expr), 
+                              device=self.device)
         elif expr.func == sympy.Symbol:
             return self._input_data[self.input_names.index(expr.name)]
         elif expr.func == BooleanTrue or expr.func == BooleanFalse:
-            return torch.full(self._input_data[0].shape, bool(expr))
+            return torch.full(self._input_data[0].shape, bool(expr),
+                              device=self.device)
         elif expr.func == sympy.Add:
             value = self._eval(expr.args[0])
             for arg in expr.args[1:]:

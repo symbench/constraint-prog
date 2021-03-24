@@ -38,7 +38,6 @@ class Explorer:
                  gradient_lr: float, gradient_iter: int):
         self.problem_json = problem_json
         self.output_dir = output_dir
-        self.cuda_enable = cuda_enable
         self.to_csv = to_csv
         self.max_points = max_points
         self.method = method
@@ -48,6 +47,9 @@ class Explorer:
 
         self.gradient_lr = gradient_lr
         self.gradient_iter = gradient_iter
+
+        self.device = torch.device(
+            "cuda:0" if torch.cuda.is_available() and cuda_enable else "cpu")
 
         with open(problem_json) as f:
             self.json_content = json.loads(f.read())
@@ -67,19 +69,22 @@ class Explorer:
                               for equ in self.equations]
             del constraints[key]
 
-        self.func = SympyFunc(self.equations)
+        self.func = SympyFunc(self.equations, device=self.device)
 
         # disregard entries that are unused in any equations
         for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
             del constraints[unused_key]
 
         assert sorted(constraints.keys()) == self.func.input_names
-        self.input_min = torch.Tensor([[constraints[var]["min"]
-                                        for var in self.func.input_names]])
-        self.input_max = torch.Tensor([[constraints[var]["max"]
-                                        for var in self.func.input_names]])
-        self.input_res = torch.Tensor([constraints[var]["resolution"]
-                                       for var in self.func.input_names])
+        self.input_min = torch.tensor([[constraints[var]["min"]
+                                        for var in self.func.input_names]],
+                                      device=self.device)
+        self.input_max = torch.tensor([[constraints[var]["max"]
+                                        for var in self.func.input_names]],
+                                      device=self.device)
+        self.input_res = torch.tensor([constraints[var]["resolution"]
+                                       for var in self.func.input_names],
+                                      device=self.device)
 
         self.tolerance = self.json_content["eps"]
 
@@ -115,9 +120,7 @@ class Explorer:
         print("Variable names:", ', '.join(self.func.input_names))
 
     def run(self):
-        device = torch.device(
-            "cuda:0" if torch.cuda.is_available() and self.cuda_enable else "cpu")
-        input_data = self.generate_input().to(device)
+        input_data = self.generate_input().to(self.device)
 
         print("Running {} method on {} many design points".format(
             self.method, input_data.shape[0]))
@@ -132,7 +135,7 @@ class Explorer:
                                            in_data=input_data,
                                            it=self.gradient_iter,
                                            lrate=self.gradient_lr,
-                                           device=device)
+                                           device=self.device)
 
         output_data = self.check_tolerance(output_data)
         print("After checking with {} tolerance we have {} designs".format(
@@ -157,15 +160,17 @@ class Explorer:
             with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(self.func.input_names)
-                writer.writerows(samples.numpy())
+                writer.writerows(samples.cpu().numpy())
         else:
             np.savez_compressed(file_name,
                                 sample_vars=self.func.input_names,
-                                sample_data=samples)
+                                sample_data=samples.cpu().numpy())
 
     def generate_input(self):
         """Generates input data with uniform distribution."""
-        sample = torch.rand(size=(self.max_points, self.func.input_size))
+        sample = torch.rand(
+            size=(self.max_points, self.func.input_size),
+            device=self.device)
         sample *= (self.input_max - self.input_min)
         sample += self.input_min
         return sample
@@ -211,8 +216,10 @@ class Explorer:
         rounded = rounded.round().type(torch.int64)
 
         # hash based filtering is not unique, but good enough
-        randcoef = torch.randint(-10000000, 10000000, (1, samples.shape[1]))
-        hashnums = (rounded * randcoef).sum(dim=1)
+        randcoef = torch.randint(
+            -10000000, 10000000, (1, samples.shape[1]),
+            device=self.device)
+        hashnums = (rounded * randcoef).sum(dim=1).cpu()
 
         # this is slow, but good enough
         selected = torch.zeros(samples.shape[0], dtype=bool)
@@ -223,7 +230,7 @@ class Explorer:
                 hashset.add(value)
                 selected[idx] = True
 
-        return samples[selected]
+        return samples[selected.to(samples.device)]
 
     def prune_bounding_box(self, samples: torch.tensor):
         assert samples.ndim == 2
