@@ -62,7 +62,11 @@ class SympyFunc(object):
         for expr in expressions:
             output_data.append(self._eval(expr))
         self._input_data = []
-        return torch.stack(output_data, dim=-1)
+        output_data = torch.stack(output_data, dim=-1)
+        # zero out bad output data
+        output_data = output_data.nan_to_num(
+            nan=0.0, posinf=1e40, neginf=-1e40)
+        return output_data
 
     def _eval(self, expr: sympy.Expr) -> torch.tensor:
         if (expr.func == sympy.Integer or expr.func == sympy.Float
