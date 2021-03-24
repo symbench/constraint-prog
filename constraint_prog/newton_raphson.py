@@ -35,7 +35,7 @@ def jacobian(func: Callable, input_data: torch.tensor) -> torch.tensor:
     jacobian_data = torch.empty(
         (input_data.shape[0], output_data.shape[1], input_data.shape[1]),
         device=input_data.device)
-    for i in range(output_data.shape[1]):
+    for i in range(jacobian_data.shape[1]):
         jacobian_data[:, i, :] = torch.autograd.grad(
             output_data[:, i],
             input_data,
@@ -44,6 +44,9 @@ def jacobian(func: Callable, input_data: torch.tensor) -> torch.tensor:
     output_data = output_data.reshape(shape[:-1] + output_data.shape[-1:])
     jacobian_data = jacobian_data.reshape(
         shape[:-1] + jacobian_data.shape[-2:])
+    # zero out bad gradients
+    jacobian_data = jacobian_data.nan_to_num(
+        nan=0.0, posinf=1e40, neginf=-1e40)
     return output_data.detach(), jacobian_data.detach()
 
 
@@ -78,7 +81,13 @@ def pseudo_inverse2(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor
     if device == "cuda":
         matrix = matrix.cpu()
 
-    u, s, v = torch.linalg.svd(matrix, full_matrices=False, compute_uv=True)
+    try:
+        u, s, v = torch.linalg.svd(
+            matrix, full_matrices=False, compute_uv=True)
+    except:
+        print(matrix)
+        assert matrix.isfinite().all().item()
+        raise
 
     if device == "cuda":
         u = u.to(device)
