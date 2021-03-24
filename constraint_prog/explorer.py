@@ -20,7 +20,6 @@ from inspect import getmembers
 import importlib.util
 import json
 import os
-from typing import List
 
 import numpy as np
 import sympy
@@ -69,13 +68,12 @@ class Explorer:
             del constraints[key]
 
         self.func = SympyFunc(self.equations)
+
         # disregard entries that are unused in any equations
         for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
             del constraints[unused_key]
 
         assert sorted(constraints.keys()) == self.func.input_names
-        # print(self.func.input_names)
-
         self.input_min = torch.Tensor([[constraints[var]["min"]
                                         for var in self.func.input_names]])
         self.input_max = torch.Tensor([[constraints[var]["max"]
