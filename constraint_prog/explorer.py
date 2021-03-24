@@ -34,7 +34,7 @@ class Explorer:
     def __init__(self, problem_json: str, output_dir: str,
                  cuda_enable: bool, to_csv: bool,
                  max_points: int, method: str,
-                 newton_eps: float, newton_iter: int,
+                 newton_eps: float, newton_iter: int, newton_bbox: str,
                  gradient_lr: float, gradient_iter: int):
         self.problem_json = problem_json
         self.output_dir = output_dir
@@ -44,6 +44,7 @@ class Explorer:
 
         self.newton_eps = newton_eps
         self.newton_iter = newton_iter
+        self.newton_bbox = newton_bbox
 
         self.gradient_lr = gradient_lr
         self.gradient_iter = gradient_iter
@@ -126,10 +127,14 @@ class Explorer:
             self.method, input_data.shape[0]))
         output_data = None
         if self.method == "newton":
+            bounding_box = torch.cat(
+                (self.input_min, self.input_max))
             output_data = newton_raphson(func=self.func,
                                          input_data=input_data,
                                          num_iter=self.newton_iter,
-                                         epsilon=self.newton_eps)
+                                         epsilon=self.newton_eps,
+                                         bounding_box=bounding_box,
+                                         method=self.newton_bbox)
         elif self.method == "gradient":
             output_data = gradient_descent(f=self.func,
                                            in_data=input_data,
@@ -258,6 +263,9 @@ def main(args=None):
                         help='Epsilon value for newton method')
     parser.add_argument('--newton-iter', type=int, metavar='NUM', default=10,
                         help='Number of iterations for the newton method')
+    parser.add_argument('--newton-bbox', type=str, default="none",
+                        choices=["none", "clip", "minmax"],
+                        help='Bounding box calculation method')
     parser.add_argument('--gradient-lr', type=int, metavar='NUM', default=0.1,
                         help='Learning rate value for gradient method')
     parser.add_argument('--gradient-iter', type=int, metavar='NUM', default=100,
@@ -275,6 +283,7 @@ def main(args=None):
                         output_dir=args.output_dir,
                         method=args.method,
                         newton_eps=args.newton_eps,
+                        newton_bbox=args.newton_bbox,
                         newton_iter=args.newton_iter,
                         gradient_lr=args.gradient_lr,
                         gradient_iter=args.gradient_iter)

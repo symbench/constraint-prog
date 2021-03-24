@@ -6,8 +6,8 @@
   "eps": 1e-6,
   "constraints": {
     "x": {
-      "min": -3.0,
-      "max": 3.0,
+      "min": -2.0,
+      "max": 4.0,
       "resolution": 0.001
     },
     "y": {

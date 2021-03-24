@@ -29,12 +29,12 @@
     },
     "hull_length": {
       "min": 2.0,
-      "max": 10.0,
+      "max": 20.0,
       "resolution": 1.0
     },
     "outer_hull_diameter": {
       "min": 1.0,
-      "max": 3.0,
+      "max": 2.0,
       "resolution": 0.1
     },
     "inner_hull_diamater": {
@@ -43,8 +43,8 @@
       "resolution": 0.1
     },
     "maximal_dive_depth": {
-      "min": 1000.0,
-      "max": 2000.0,
+      "min": 100.0,
+      "max": 4000.0,
       "resolution": 100.0
     }
   }

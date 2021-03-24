@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable
+from typing import Callable, Optional
 
 import torch
 
@@ -93,27 +93,49 @@ def pseudo_inverse2(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor
     return b
 
 
+class MethodMinMax(object):
+    """
+    Enforces the bounding box by calculating the amount we are
+    outside of the box and setting them to zero.
+    """
+
+    def __init__(self, func: Callable, bounding_box: torch.tensor):
+        self.func = func
+        self.bounding_box = bounding_box
+        self.zero = torch.zeros((), device=bounding_box.device)
+
+    def __call__(self, input_data: torch.tensor) -> torch.tensor:
+        output_data = self.func(input_data)
+        min_err = (self.bounding_box[0] - input_data).maximum(self.zero)
+        max_err = (input_data - self.bounding_box[1]).maximum(self.zero)
+        return torch.cat((output_data, min_err + max_err), dim=-1)
+
+
 def newton_raphson(func: Callable, input_data: torch.tensor,
-                   num_iter: int = 10, epsilon: float = 1e-3) -> torch.tensor:
+                   num_iter: int = 10, epsilon: float = 1e-3,
+                   bounding_box: Optional[torch.tensor] = None,
+                   method: str = "clip") -> torch.tensor:
     """
     Calculates num_iter many iterations of the multidimensional Newton-
     Raphson method. The input_data must of shape [*, input_size]. The func
     function must take a tensor of this shape and produce a tensor of shape
     [*, output_size]. The epsilon is controlling the pseudo inverse operation.
-    The returned tensor is of shape [*, input_size].
+    The bounding box is of shape [2, input_size] and specifies the minimum
+    maximum values. The returned tensor is of shape [*, input_size].
     """
+    if bounding_box is None:
+        method = "none"
+    if method == "minmax":
+        func = MethodMinMax(func, bounding_box)
+        method = "none"
+
     for _ in range(num_iter):
         output_data, jacobian_data = jacobian(func, input_data)
         jacobian_inv = pseudo_inverse2(jacobian_data, epsilon=epsilon)
         update = torch.matmul(
             jacobian_inv, output_data.unsqueeze(dim=-1)).squeeze(-1)
-        input_data2 = input_data - update
-        if False:  # hack
-            output_data2 = func(input_data2)
-            input_data3 = input_data - 0.5 * update
-            output_data3 = func(input_data3)
-            better = output_data3.pow(2.0).sum(dim=-1) < \
-                output_data2.pow(2.0).sum(dim=-1)
-            input_data2[better] = input_data3[better]
-        input_data = input_data2
+        input_data -= update
+        if method == "clip":
+            input_data = torch.minimum(input_data, bounding_box[1])
+            input_data = torch.maximum(input_data, bounding_box[0])
     return input_data
