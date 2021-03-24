@@ -1,0 +1,19 @@
+{
+  "source": "elliptic_curve.py",
+  "equations": [
+    "equ"
+  ],
+  "eps": 1e-6,
+  "constraints": {
+    "x": {
+      "min": -3.0,
+      "max": 3.0,
+      "resolution": 0.001
+    },
+    "y": {
+      "min": -3.0,
+      "max": 3.0,
+      "resolution": 0.001
+    }
+  }
+}
