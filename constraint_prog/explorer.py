@@ -69,9 +69,12 @@ class Explorer:
             del constraints[key]
 
         self.func = SympyFunc(self.equations)
-        # print(self.func.input_names)
+        # disregard entries that are unused in any equations
+        for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
+            del constraints[unused_key]
 
         assert sorted(constraints.keys()) == self.func.input_names
+        # print(self.func.input_names)
 
         self.input_min = torch.Tensor([[constraints[var]["min"]
                                         for var in self.func.input_names]])
@@ -141,10 +144,9 @@ class Explorer:
         print("After pruning close points we have {} designs".format(
             output_data.shape[0]))
 
-        if False:
-            output_data = self.prune_bounding_box(output_data)
-            print("After bounding box pruning we have {} designs".format(
-                output_data.shape[0]))
+        output_data = self.prune_bounding_box(output_data)
+        print("After bounding box pruning we have {} designs".format(
+            output_data.shape[0]))
 
         self.save_data(output_data)
 
@@ -154,7 +156,7 @@ class Explorer:
         file_name = os.path.join(os.path.abspath(self.output_dir), filename)
         print("Saving generated design points to:", file_name)
         if self.to_csv:
-            with open(filename, 'w') as f:
+            with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(self.func.input_names)
                 writer.writerows(samples.numpy())
