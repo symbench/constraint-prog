@@ -28,7 +28,7 @@ setup(
     install_requires=[
         # you might need to use this if you run into CUDA internal error:
         # pip3 install torch==1.8.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
-        'torch>=1.5', 
+        'torch>=1.5',
         'matplotlib',
         'sympy'
     ],

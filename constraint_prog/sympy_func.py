@@ -72,7 +72,7 @@ class SympyFunc(object):
                 or expr.func == sympy.core.numbers.One
                 or expr.func == sympy.core.numbers.Pi
                 or expr.func == sympy.core.numbers.Half):
-            return torch.full(self._input_data[0].shape, float(expr), 
+            return torch.full(self._input_data[0].shape, float(expr),
                               device=self.device)
         elif expr.func == sympy.Symbol:
             return self._input_data[self.input_names.index(expr.name)]
