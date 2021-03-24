@@ -128,6 +128,9 @@ def newton_raphson(func: Callable, input_data: torch.tensor,
     if method == "minmax":
         func = MethodMinMax(func, bounding_box)
         method = "none"
+    elif method == "mmclip":
+        func = MethodMinMax(func, bounding_box)
+        method = "clip"
 
     for _ in range(num_iter):
         output_data, jacobian_data = jacobian(func, input_data)
