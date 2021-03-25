@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+from copy import deepcopy
 import csv
 from inspect import getmembers
 import importlib.util
@@ -57,7 +58,8 @@ class Explorer:
         self.equation_dict = self.json_content["equations"]
 
         self.equations = []
-        self.get_equations()
+        self.expressions = dict()
+        self.get_equations_and_expressions()
 
         self.fixed_values = dict()
         constraints = self.process_constraints()
@@ -96,7 +98,7 @@ class Explorer:
 
         return constraints
 
-    def get_equations(self):
+    def get_equations_and_expressions(self):
         path = os.path.join(
             os.path.dirname(self.problem_json), self.json_content["source"])
         print("Loading python file:", path)
@@ -120,6 +122,14 @@ class Explorer:
                     break
             else:
                 raise ValueError("equation " + name + " not found")
+
+        for name in self.json_content["expressions"]:
+            for member in members:
+                if member[0] == name:
+                    self.expressions[name] = member[1]
+                    break
+            else:
+                raise ValueError("expression " + name + " not found")
 
     def print_equations(self):
         print("Loaded equations:")
@@ -170,11 +180,29 @@ class Explorer:
         print("Saving generated design points to:", file_name)
 
         # Append fixed values to samples
-        sample_vars = self.func.input_names
+        sample_vars = deepcopy(self.func.input_names)
         sample_vars.extend(list(self.fixed_values.keys()))
+        sample_vars.extend(list(self.expressions.keys()))
         sample_data = samples.cpu().numpy()
-        new_columns = np.repeat(np.array([list(self.fixed_values.values())]), sample_data.shape[0], axis=0)
-        sample_data = np.concatenate((sample_data, new_columns), axis=1)
+        columns_fixed_values = np.repeat(
+            np.array([list(self.fixed_values.values())]),
+            sample_data.shape[0],
+            axis=0
+        )
+        sample_data = np.concatenate(
+            (sample_data, columns_fixed_values), axis=1
+        )
+
+        for name, expr in self.expressions.items():
+            try:
+                columns_expressions = self.func.evaluate([expr], samples).cpu().numpy()
+                sample_data = np.concatenate(
+                    (sample_data, columns_expressions), axis=1
+                )
+            except ValueError:
+                raise Exception("Expression " + name +
+                                " cannot be evaluated since there is at least one symbol in the formula, "
+                                "which was dropped at simplification/substitution.")
 
         if self.to_csv:
             with open(filename, 'w', newline='', encoding='utf-8') as f:
