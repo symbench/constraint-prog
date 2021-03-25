@@ -6,7 +6,7 @@
       "tolerance": 1e-6
     }
   ],
-  "constraints": {
+  "variables": {
     "x": {
       "min": -2.0,
       "max": 4.0,

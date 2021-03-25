@@ -83,7 +83,7 @@ class Explorer:
     def process_constraints(self):
         # disregard entries that start with a dash
         constraints = {key: val
-                       for (key, val) in self.json_content["constraints"].items()
+                       for (key, val) in self.json_content["variables"].items()
                        if not key.startswith('-')}
 
         # collect fixed values and substitute them into the equations

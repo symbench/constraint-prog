@@ -22,7 +22,7 @@
             "tolerance": 1e-6
         }
     ],
-    "constraints": {
+    "variables": {
         "salinity": {
             "__help__": "real-world min/max: [0, 45] PSU",
             "min": 35.0,

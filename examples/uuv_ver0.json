@@ -14,7 +14,7 @@
       "tolerance": 1e-6
     }
   ],
-  "constraints": {
+  "variables": {
     "horizontal_distance": {
       "min": 10000.0,
       "max": 10000.0,
