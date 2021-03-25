@@ -54,7 +54,7 @@ class Explorer:
 
         with open(problem_json) as f:
             self.json_content = json.loads(f.read())
-        self.tolerance = self.json_content["eps"]
+        self.equation_dict = self.json_content["equations"]
 
         self.equations = []
         self.get_equations()
@@ -109,7 +109,7 @@ class Explorer:
         members = getmembers(equmod)
 
         self.equations = []
-        for name in self.json_content["equations"]:
+        for name in [eqn["equation"] for eqn in self.equation_dict]:
             # disregard entries that start with a dash
             if name.startswith('-'):
                 continue
@@ -150,8 +150,8 @@ class Explorer:
                                            device=self.device)
 
         output_data = self.check_tolerance(output_data)
-        print("After checking with {} tolerance we have {} designs".format(
-            self.tolerance, output_data.shape[0]))
+        print("After checking tolerances we have {} designs".format(
+            output_data.shape[0]))
 
         output_data = self.prune_close_points2(output_data)
         print("After pruning close points we have {} designs".format(
@@ -201,7 +201,11 @@ class Explorer:
         which the 2-norm of errors is less than the tolerance.
         """
         equation_output = self.func(samples)
-        good_point_idx = torch.norm(equation_output, dim=1) < self.tolerance
+        tolerances = torch.Tensor(
+            [eqn["tolerance"] for eqn in self.equation_dict],
+            device=self.device
+        ).reshape((1, -1))
+        good_point_idx = (torch.abs(equation_output) < tolerances).all(dim=1)
         return samples[good_point_idx]
 
     def prune_close_points(self, output_data: torch.tensor):

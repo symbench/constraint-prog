@@ -1,9 +1,11 @@
 {
   "source": "elliptic_curve.py",
   "equations": [
-    "equ"
+    {
+      "equation": "equ",
+      "tolerance": 1e-6
+    }
   ],
-  "eps": 1e-6,
   "constraints": {
     "x": {
       "min": -2.0,
