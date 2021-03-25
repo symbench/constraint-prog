@@ -59,6 +59,7 @@ class Explorer:
         self.equations = []
         self.get_equations()
 
+        self.fixed_values = dict()
         constraints = self.process_constraints()
 
         self.func = SympyFunc(self.equations, device=self.device)
@@ -84,10 +85,10 @@ class Explorer:
                        if not key.startswith('-')}
 
         # collect fixed values and substitute them into the equations
-        fixed_values = {key: val["min"]
-                        for (key, val) in constraints.items()
-                        if val["min"] == val["max"]}
-        for (key, val) in fixed_values.items():
+        self.fixed_values = {key: val["min"]
+                             for (key, val) in constraints.items()
+                             if val["min"] == val["max"]}
+        for (key, val) in self.fixed_values.items():
             print("Fixing {} to {}".format(key, val))
             self.equations = [equ.subs(sympy.Symbol(key), val)
                               for equ in self.equations]
@@ -167,15 +168,23 @@ class Explorer:
             (".csv" if self.to_csv else ".npz")
         file_name = os.path.join(os.path.abspath(self.output_dir), filename)
         print("Saving generated design points to:", file_name)
+
+        # Append fixed values to samples
+        sample_vars = self.func.input_names
+        sample_vars.extend(list(self.fixed_values.keys()))
+        sample_data = samples.cpu().numpy()
+        new_columns = np.repeat(np.array([list(self.fixed_values.values())]), sample_data.shape[0], axis=0)
+        sample_data = np.concatenate((sample_data, new_columns), axis=1)
+
         if self.to_csv:
             with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(self.func.input_names)
-                writer.writerows(samples.cpu().numpy())
+                writer.writerow(sample_vars)
+                writer.writerows(sample_data)
         else:
             np.savez_compressed(file_name,
-                                sample_vars=self.func.input_names,
-                                sample_data=samples.cpu().numpy())
+                                sample_vars=sample_vars,
+                                sample_data=sample_data)
 
     def generate_input(self):
         """Generates input data with uniform distribution."""
@@ -244,7 +253,7 @@ class Explorer:
 
         return samples[selected.to(samples.device)]
 
-    def prune_bounding_box(self, samples: torch.Tensor):
+    def prune_bounding_box(self, samples: torch.tensor):
         assert samples.ndim == 2
         selected = torch.logical_and(samples >= self.constraints_min,
                                      samples <= self.constraints_max)
