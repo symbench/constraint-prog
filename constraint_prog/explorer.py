@@ -54,15 +54,38 @@ class Explorer:
 
         with open(problem_json) as f:
             self.json_content = json.loads(f.read())
-        self.equations = None
+        self.tolerance = self.json_content["eps"]
+
+        self.equations = []
         self.get_equations()
 
-        constraints = self.json_content["constraints"]
+        constraints = self.process_constraints()
+
+        self.func = SympyFunc(self.equations, device=self.device)
+        # disregard entries that are unused in any equations
+        for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
+            del constraints[unused_key]
+
+        assert sorted(constraints.keys()) == self.func.input_names
+        self.constraints_min = torch.tensor([[constraints[var]["min"]
+                                              for var in self.func.input_names]],
+                                            device=self.device)
+        self.constraints_max = torch.tensor([[constraints[var]["max"]
+                                              for var in self.func.input_names]],
+                                            device=self.device)
+        self.constraints_res = torch.tensor([constraints[var]["resolution"]
+                                             for var in self.func.input_names],
+                                            device=self.device)
+
+    def process_constraints(self):
         # disregard entries that start with a dash
-        constraints = {key: val for (key, val) in constraints.items()
+        constraints = {key: val
+                       for (key, val) in self.json_content["constraints"].items()
                        if not key.startswith('-')}
 
-        fixed_values = {key: val["min"] for (key, val) in constraints.items()
+        # collect fixed values and substitute them into the equations
+        fixed_values = {key: val["min"]
+                        for (key, val) in constraints.items()
                         if val["min"] == val["max"]}
         for (key, val) in fixed_values.items():
             print("Fixing {} to {}".format(key, val))
@@ -70,24 +93,7 @@ class Explorer:
                               for equ in self.equations]
             del constraints[key]
 
-        self.func = SympyFunc(self.equations, device=self.device)
-
-        # disregard entries that are unused in any equations
-        for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
-            del constraints[unused_key]
-
-        assert sorted(constraints.keys()) == self.func.input_names
-        self.input_min = torch.tensor([[constraints[var]["min"]
-                                        for var in self.func.input_names]],
-                                      device=self.device)
-        self.input_max = torch.tensor([[constraints[var]["max"]
-                                        for var in self.func.input_names]],
-                                      device=self.device)
-        self.input_res = torch.tensor([constraints[var]["resolution"]
-                                       for var in self.func.input_names],
-                                      device=self.device)
-
-        self.tolerance = self.json_content["eps"]
+        return constraints
 
     def get_equations(self):
         path = os.path.join(
@@ -128,7 +134,7 @@ class Explorer:
         output_data = None
         if self.method == "newton":
             bounding_box = torch.cat(
-                (self.input_min, self.input_max))
+                (self.constraints_min, self.constraints_max))
             output_data = newton_raphson(func=self.func,
                                          input_data=input_data,
                                          num_iter=self.newton_iter,
@@ -176,8 +182,8 @@ class Explorer:
         sample = torch.rand(
             size=(self.max_points, self.func.input_size),
             device=self.device)
-        sample *= (self.input_max - self.input_min)
-        sample += self.input_min
+        sample *= (self.constraints_max - self.constraints_min)
+        sample += self.constraints_min
         return sample
 
     def check_tolerance(self, samples: torch.tensor):
@@ -200,8 +206,8 @@ class Explorer:
             output_data_tile * output_data_k1n + output_data_k1n ** 2
 
         comparison = torch.tensor(
-            output_data_compare > (self.input_res.reshape(
-                (1, 1, self.input_res.shape[0])) ** 2)
+            output_data_compare > (self.constraints_res.reshape(
+                (1, 1, self.constraints_res.shape[0])) ** 2)
         )
         difference_matrix = torch.sum(comparison.to(int), dim=2)
         indices = np.array([[(i, j) for j in range(output_data.shape[0])]
@@ -211,13 +217,14 @@ class Explorer:
         close_point_idx = indices[close_points_bool_idx.numpy()]
         close_and_different_points_idx = indices[close_point_idx[:, 0]
                                                  != close_point_idx[:, 1]]
+        print(close_and_different_points_idx)
 
         # TODO: from close and different point sets remove all except one
         return output_data
 
     def prune_close_points2(self, samples: torch.tensor):
-        assert samples.ndim == 2 and samples.shape[1] == len(self.input_res)
-        rounded = samples / self.input_res.reshape((1, samples.shape[1]))
+        assert samples.ndim == 2 and samples.shape[1] == len(self.constraints_res)
+        rounded = samples / self.constraints_res.reshape((1, samples.shape[1]))
         rounded = rounded.round().type(torch.int64)
 
         # hash based filtering is not unique, but good enough
@@ -227,7 +234,7 @@ class Explorer:
         hashnums = (rounded * randcoef).sum(dim=1).cpu()
 
         # this is slow, but good enough
-        selected = torch.zeros(samples.shape[0], dtype=bool)
+        selected = torch.zeros(samples.shape[0]).bool()
         hashset = set()
         for idx in range(samples.shape[0]):
             value = int(hashnums[idx])
@@ -237,10 +244,10 @@ class Explorer:
 
         return samples[selected.to(samples.device)]
 
-    def prune_bounding_box(self, samples: torch.tensor):
+    def prune_bounding_box(self, samples: torch.Tensor):
         assert samples.ndim == 2
-        selected = torch.logical_and(samples >= self.input_min,
-                                     samples <= self.input_max)
+        selected = torch.logical_and(samples >= self.constraints_min,
+                                     samples <= self.constraints_max)
         selected = selected.all(dim=1)
         return samples[selected]
 
