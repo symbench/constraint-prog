@@ -24,8 +24,12 @@ battery_cell_capacity = 40  # Wh
 battery_cell_diameter = 0.0332  # m
 battery_cell_length = 0.0615  # m
 battery_cell_weight = 0.180  # kg
+drag_coefficient = 0.25
+fineness_ratio = 7.0
+wetted_surface_coefficient = 1.5
+prismatic_coefficient = 1.0
+glide_slope = 35.0 / 128.0 * sympy.pi
 
-glide_slope = sympy.Symbol("glide_slope")  # radians
 maximal_dive_depth = sympy.Symbol("maximal_dive_depth")  # m
 horizontal_distance = sympy.Symbol("horizontal_distance")  # m
 nominal_horizontal_speed = sympy.Symbol("nominal_horizontal_speed")  # m/s
@@ -36,10 +40,6 @@ hull_length = sympy.Symbol("hull_length")  # m
 mission_duration = sympy.Symbol("mission_duration")  # s
 hotel_power = sympy.Symbol("hotel_power")  # W
 payload_power = sympy.Symbol("payload_power")  # W
-drag_coefficient = sympy.Symbol("drag_coefficient")
-fineness_ratio = sympy.Symbol("fineness_ratio")
-wetted_surface_coefficient = sympy.Symbol("wetted_surface_coefficient")
-prismatic_coefficient = sympy.Symbol("prismatic_coefficient")
 
 # mission duration equation (step 1, page 11)
 

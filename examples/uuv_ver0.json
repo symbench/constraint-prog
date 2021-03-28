@@ -53,5 +53,7 @@
       "resolution": 100.0
     }
   },
-  "expressions": []
+  "expressions": [
+    "total_propulsion_energy"
+  ]
 }

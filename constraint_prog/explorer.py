@@ -91,10 +91,12 @@ class Explorer:
         self.fixed_values = {key: val["min"]
                              for (key, val) in constraints.items()
                              if val["min"] == val["max"]}
-        for (key, val) in self.fixed_values.items():
+        for key, val in self.fixed_values.items():
             print("Fixing {} to {}".format(key, val))
             for val2 in self.equations.values():
                 val2["expr"] = val2["expr"].subs(sympy.Symbol(key), val)
+            self.expressions = {key2: val2.subs(sympy.Symbol(key), val)
+                                for (key2, val2) in self.expressions.items()}
             del constraints[key]
 
         return constraints
@@ -207,12 +209,11 @@ class Explorer:
 
         for name, expr in self.expressions.items():
             try:
-                columns_expressions = self.func.evaluate([expr], samples).cpu().numpy()
-                sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
-            except ValueError:
-                raise Exception("Expression " + name +
-                                " cannot be evaluated since there is at least one symbol in the formula, "
-                                "which was dropped at simplification/substitution.")
+                columns_expressions = self.func.evaluate(
+                    [expr], samples, equs_as_float=False).cpu().numpy()
+            except ValueError as err:
+                raise Exception("Expression " + name + " cannot be evaluated: " + str(err))
+            sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
 
         if self.to_csv:
             with open(filename, 'w', newline='', encoding='utf-8') as f:

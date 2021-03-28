@@ -115,6 +115,8 @@ class SympyFunc(object):
             return torch.full(self._input_data[0].shape, float(expr),
                               device=self.device)
         elif expr.func == sympy.Symbol:
+            if expr.name not in self.input_names:
+                raise ValueError("unknown variable " + expr.name)
             return self._input_data[self.input_names.index(expr.name)]
         elif expr.func == BooleanTrue or expr.func == BooleanFalse:
             return torch.full(self._input_data[0].shape, bool(expr),
