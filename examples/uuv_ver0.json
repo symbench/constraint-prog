@@ -1,12 +1,17 @@
 {
   "source": "uuv_ver0.py",
-  "equations": [
-    "mission_duration_equation",
-    "hull_length_equation",
-    "hull_thickness_equation"
-  ],
-  "eps": 1e-6,
-  "constraints": {
+  "equations": {
+    "mission_duration_equation": {
+      "tolerance": 1e-6
+    },
+    "hull_length_equation": {
+      "tolerance": 1e-6
+    },
+    "hull_thickness_equation": {
+      "tolerance": 1e-6
+    }
+  },
+  "variables": {
     "horizontal_distance": {
       "min": 10000.0,
       "max": 10000.0,
@@ -47,5 +52,6 @@
       "max": 4000.0,
       "resolution": 100.0
     }
-  }
+  },
+  "expressions": []
 }

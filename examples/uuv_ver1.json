@@ -1,14 +1,23 @@
 {
     "source": "uuv_ver1.py",
-    "equations": [
-      "-neutral_buoyancy_constraint",
-      "internal_hull_volume_constraint",
-      "hull_integrity_constraint",
-      "-propulsion_fluid_volume_constraint",
-      "-power_supply_constraint"
-    ],
-    "eps": 1e-6,
-    "constraints": {
+    "equations": {
+        "-neutral_buoyancy_constraint": {
+            "tolerance": 1e-6
+        },
+        "internal_hull_volume_constraint": {
+            "tolerance": 1e-6
+        },
+        "hull_integrity_constraint": {
+            "tolerance": 1e-6
+        },
+        "-propulsion_fluid_volume_constraint": {
+            "tolerance": 1e-6
+        },
+        "-power_supply_constraint": {
+            "tolerance": 1e-6
+        }
+    },
+    "variables": {
         "salinity": {
             "__help__": "real-world min/max: [0, 45] PSU",
             "min": 35.0,
@@ -207,5 +216,6 @@
             "max": 0.7,
             "resolution": 0.01
         }
-    }
+    },
+    "expressions": []
 }

@@ -1,10 +1,11 @@
 {
   "source": "elliptic_curve.py",
-  "equations": [
-    "equ"
-  ],
-  "eps": 1e-6,
-  "constraints": {
+  "equations": {
+    "equ": {
+      "tolerance": 1e-6
+    }
+  },
+  "variables": {
     "x": {
       "min": -2.0,
       "max": 4.0,
@@ -15,5 +16,8 @@
       "max": 3.0,
       "resolution": 0.001
     }
-  }
+  },
+  "expressions": [
+    "norm"
+  ]
 }

@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+from copy import deepcopy
 import csv
 from inspect import getmembers
 import importlib.util
@@ -54,42 +55,51 @@ class Explorer:
 
         with open(problem_json) as f:
             self.json_content = json.loads(f.read())
-        self.equations = None
-        self.get_equations()
 
-        constraints = self.json_content["constraints"]
-        # disregard entries that start with a dash
-        constraints = {key: val for (key, val) in constraints.items()
-                       if not key.startswith('-')}
+        self.equations = dict()
+        self.expressions = dict()
+        self.get_equations_and_expressions()
 
-        fixed_values = {key: val["min"] for (key, val) in constraints.items()
-                        if val["min"] == val["max"]}
-        for (key, val) in fixed_values.items():
-            print("Fixing {} to {}".format(key, val))
-            self.equations = [equ.subs(sympy.Symbol(key), val)
-                              for equ in self.equations]
-            del constraints[key]
+        self.fixed_values = dict()
+        constraints = self.process_constraints()
 
-        self.func = SympyFunc(self.equations, device=self.device)
-
+        self.func = SympyFunc(
+            [equ["expr"] for equ in self.equations.values()],
+            device=self.device)
         # disregard entries that are unused in any equations
         for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
             del constraints[unused_key]
 
         assert sorted(constraints.keys()) == self.func.input_names
-        self.input_min = torch.tensor([[constraints[var]["min"]
-                                        for var in self.func.input_names]],
-                                      device=self.device)
-        self.input_max = torch.tensor([[constraints[var]["max"]
-                                        for var in self.func.input_names]],
-                                      device=self.device)
-        self.input_res = torch.tensor([constraints[var]["resolution"]
-                                       for var in self.func.input_names],
-                                      device=self.device)
+        self.constraints_min = torch.tensor(
+            [[constraints[var]["min"] for var in self.func.input_names]],
+            device=self.device)
+        self.constraints_max = torch.tensor(
+            [[constraints[var]["max"] for var in self.func.input_names]],
+            device=self.device)
+        self.constraints_res = torch.tensor(
+            [constraints[var]["resolution"]for var in self.func.input_names],
+            device=self.device)
 
-        self.tolerance = self.json_content["eps"]
+    def process_constraints(self):
+        # disregard entries that start with a dash
+        constraints = {key: val
+                       for (key, val) in self.json_content["variables"].items()
+                       if not key.startswith('-')}
 
-    def get_equations(self):
+        # collect fixed values and substitute them into the equations
+        self.fixed_values = {key: val["min"]
+                             for (key, val) in constraints.items()
+                             if val["min"] == val["max"]}
+        for (key, val) in self.fixed_values.items():
+            print("Fixing {} to {}".format(key, val))
+            for val2 in self.equations.values():
+                val2["expr"] = val2["expr"].subs(sympy.Symbol(key), val)
+            del constraints[key]
+
+        return constraints
+
+    def get_equations_and_expressions(self):
         path = os.path.join(
             os.path.dirname(self.problem_json), self.json_content["source"])
         print("Loading python file:", path)
@@ -101,18 +111,37 @@ class Explorer:
         spec.loader.exec_module(equmod)
         members = getmembers(equmod)
 
-        self.equations = []
-        for name in self.json_content["equations"]:
-            # disregard entries that start with a dash
-            if name.startswith('-'):
-                continue
+        def find_member(name):
             for member in members:
                 if member[0] == name:
-                    assert isinstance(member[1], sympy.Eq)
-                    self.equations.append(member[1])
-                    break
-            else:
+                    return member[1]
+            return None
+
+        self.equations.clear()
+        for (name, conf) in self.json_content["equations"].items():
+            if name.startswith('-'):
+                continue
+            member = find_member(name)
+            if member is None:
                 raise ValueError("equation " + name + " not found")
+            assert (isinstance(member, sympy.Eq) or
+                    isinstance(member, sympy.LessThan) or
+                    isinstance(member, sympy.StrictLessThan) or
+                    isinstance(member, sympy.GreaterThan) or
+                    isinstance(member, sympy.StrictGreaterThan))
+            self.equations[name] = {
+                "expr": member,
+                "tolerance": conf["tolerance"]
+            }
+
+        self.expressions.clear()
+        for name in self.json_content["expressions"]:
+            if name.startswith('-'):
+                continue
+            member = find_member(name)
+            if member is None:
+                raise ValueError("expression " + name + " not found")
+            self.expressions[name] = member
 
     def print_equations(self):
         print("Loaded equations:")
@@ -128,7 +157,7 @@ class Explorer:
         output_data = None
         if self.method == "newton":
             bounding_box = torch.cat(
-                (self.input_min, self.input_max))
+                (self.constraints_min, self.constraints_max))
             output_data = newton_raphson(func=self.func,
                                          input_data=input_data,
                                          num_iter=self.newton_iter,
@@ -143,8 +172,8 @@ class Explorer:
                                            device=self.device)
 
         output_data = self.check_tolerance(output_data)
-        print("After checking with {} tolerance we have {} designs".format(
-            self.tolerance, output_data.shape[0]))
+        print("After checking tolerances we have {} designs".format(
+            output_data.shape[0]))
 
         output_data = self.prune_close_points2(output_data)
         print("After pruning close points we have {} designs".format(
@@ -161,23 +190,47 @@ class Explorer:
             (".csv" if self.to_csv else ".npz")
         file_name = os.path.join(os.path.abspath(self.output_dir), filename)
         print("Saving generated design points to:", file_name)
+
+        # Append fixed values to samples
+        sample_vars = deepcopy(self.func.input_names)
+        sample_vars.extend(list(self.fixed_values.keys()))
+        sample_vars.extend(list(self.expressions.keys()))
+        sample_data = samples.cpu().numpy()
+        columns_fixed_values = np.repeat(
+            np.array([list(self.fixed_values.values())]),
+            sample_data.shape[0],
+            axis=0
+        )
+        sample_data = np.concatenate(
+            (sample_data, columns_fixed_values), axis=1
+        )
+
+        for name, expr in self.expressions.items():
+            try:
+                columns_expressions = self.func.evaluate([expr], samples).cpu().numpy()
+                sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
+            except ValueError:
+                raise Exception("Expression " + name +
+                                " cannot be evaluated since there is at least one symbol in the formula, "
+                                "which was dropped at simplification/substitution.")
+
         if self.to_csv:
             with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(self.func.input_names)
-                writer.writerows(samples.cpu().numpy())
+                writer.writerow(sample_vars)
+                writer.writerows(sample_data)
         else:
             np.savez_compressed(file_name,
-                                sample_vars=self.func.input_names,
-                                sample_data=samples.cpu().numpy())
+                                sample_vars=sample_vars,
+                                sample_data=sample_data)
 
     def generate_input(self):
         """Generates input data with uniform distribution."""
         sample = torch.rand(
             size=(self.max_points, self.func.input_size),
             device=self.device)
-        sample *= (self.input_max - self.input_min)
-        sample += self.input_min
+        sample *= (self.constraints_max - self.constraints_min)
+        sample += self.constraints_min
         return sample
 
     def check_tolerance(self, samples: torch.tensor):
@@ -186,7 +239,11 @@ class Explorer:
         which the 2-norm of errors is less than the tolerance.
         """
         equation_output = self.func(samples)
-        good_point_idx = torch.norm(equation_output, dim=1) < self.tolerance
+        tolerances = torch.tensor(
+            [eqn["tolerance"] for eqn in self.equations.values()],
+            device=self.device
+        ).reshape((1, -1))
+        good_point_idx = (torch.abs(equation_output) < tolerances).all(dim=1)
         return samples[good_point_idx]
 
     def prune_close_points(self, output_data: torch.tensor):
@@ -200,8 +257,8 @@ class Explorer:
             output_data_tile * output_data_k1n + output_data_k1n ** 2
 
         comparison = torch.tensor(
-            output_data_compare > (self.input_res.reshape(
-                (1, 1, self.input_res.shape[0])) ** 2)
+            output_data_compare > (self.constraints_res.reshape(
+                (1, 1, self.constraints_res.shape[0])) ** 2)
         )
         difference_matrix = torch.sum(comparison.to(int), dim=2)
         indices = np.array([[(i, j) for j in range(output_data.shape[0])]
@@ -211,13 +268,14 @@ class Explorer:
         close_point_idx = indices[close_points_bool_idx.numpy()]
         close_and_different_points_idx = indices[close_point_idx[:, 0]
                                                  != close_point_idx[:, 1]]
+        print(close_and_different_points_idx)
 
         # TODO: from close and different point sets remove all except one
         return output_data
 
     def prune_close_points2(self, samples: torch.tensor):
-        assert samples.ndim == 2 and samples.shape[1] == len(self.input_res)
-        rounded = samples / self.input_res.reshape((1, samples.shape[1]))
+        assert samples.ndim == 2 and samples.shape[1] == len(self.constraints_res)
+        rounded = samples / self.constraints_res.reshape((1, samples.shape[1]))
         rounded = rounded.round().type(torch.int64)
 
         # hash based filtering is not unique, but good enough
@@ -227,7 +285,7 @@ class Explorer:
         hashnums = (rounded * randcoef).sum(dim=1).cpu()
 
         # this is slow, but good enough
-        selected = torch.zeros(samples.shape[0], dtype=bool)
+        selected = torch.zeros(samples.shape[0]).bool()
         hashset = set()
         for idx in range(samples.shape[0]):
             value = int(hashnums[idx])
@@ -239,8 +297,8 @@ class Explorer:
 
     def prune_bounding_box(self, samples: torch.tensor):
         assert samples.ndim == 2
-        selected = torch.logical_and(samples >= self.input_min,
-                                     samples <= self.input_max)
+        selected = torch.logical_and(samples >= self.constraints_min,
+                                     samples <= self.constraints_max)
         selected = selected.all(dim=1)
         return samples[selected]
 
