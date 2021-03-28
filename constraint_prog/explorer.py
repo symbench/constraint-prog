@@ -55,30 +55,31 @@ class Explorer:
 
         with open(problem_json) as f:
             self.json_content = json.loads(f.read())
-        self.equation_dict = self.json_content["equations"]
 
-        self.equations = []
+        self.equations = dict()
         self.expressions = dict()
         self.get_equations_and_expressions()
 
         self.fixed_values = dict()
         constraints = self.process_constraints()
 
-        self.func = SympyFunc(self.equations, device=self.device)
+        self.func = SympyFunc(
+            [equ["expr"] for equ in self.equations.values()],
+            device=self.device)
         # disregard entries that are unused in any equations
         for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
             del constraints[unused_key]
 
         assert sorted(constraints.keys()) == self.func.input_names
-        self.constraints_min = torch.tensor([[constraints[var]["min"]
-                                              for var in self.func.input_names]],
-                                            device=self.device)
-        self.constraints_max = torch.tensor([[constraints[var]["max"]
-                                              for var in self.func.input_names]],
-                                            device=self.device)
-        self.constraints_res = torch.tensor([constraints[var]["resolution"]
-                                             for var in self.func.input_names],
-                                            device=self.device)
+        self.constraints_min = torch.tensor(
+            [[constraints[var]["min"] for var in self.func.input_names]],
+            device=self.device)
+        self.constraints_max = torch.tensor(
+            [[constraints[var]["max"] for var in self.func.input_names]],
+            device=self.device)
+        self.constraints_res = torch.tensor(
+            [constraints[var]["resolution"]for var in self.func.input_names],
+            device=self.device)
 
     def process_constraints(self):
         # disregard entries that start with a dash
@@ -92,8 +93,8 @@ class Explorer:
                              if val["min"] == val["max"]}
         for (key, val) in self.fixed_values.items():
             print("Fixing {} to {}".format(key, val))
-            self.equations = [equ.subs(sympy.Symbol(key), val)
-                              for equ in self.equations]
+            for val2 in self.equations.values():
+                val2["expr"] = val2["expr"].subs(sympy.Symbol(key), val)
             del constraints[key]
 
         return constraints
@@ -110,26 +111,37 @@ class Explorer:
         spec.loader.exec_module(equmod)
         members = getmembers(equmod)
 
-        self.equations = []
-        for name in [eqn["equation"] for eqn in self.equation_dict]:
-            # disregard entries that start with a dash
+        def find_member(name):
+            for member in members:
+                if member[0] == name:
+                    return member[1]
+            return None
+
+        self.equations.clear()
+        for (name, conf) in self.json_content["equations"].items():
             if name.startswith('-'):
                 continue
-            for member in members:
-                if member[0] == name:
-                    assert isinstance(member[1], sympy.Eq)
-                    self.equations.append(member[1])
-                    break
-            else:
+            member = find_member(name)
+            if member is None:
                 raise ValueError("equation " + name + " not found")
+            assert (isinstance(member, sympy.Eq) or
+                    isinstance(member, sympy.LessThan) or
+                    isinstance(member, sympy.StrictLessThan) or
+                    isinstance(member, sympy.GreaterThan) or
+                    isinstance(member, sympy.StrictGreaterThan))
+            self.equations[name] = {
+                "expr": member,
+                "tolerance": conf["tolerance"]
+            }
 
+        self.expressions.clear()
         for name in self.json_content["expressions"]:
-            for member in members:
-                if member[0] == name:
-                    self.expressions[name] = member[1]
-                    break
-            else:
+            if name.startswith('-'):
+                continue
+            member = find_member(name)
+            if member is None:
                 raise ValueError("expression " + name + " not found")
+            self.expressions[name] = member
 
     def print_equations(self):
         print("Loaded equations:")
@@ -196,9 +208,7 @@ class Explorer:
         for name, expr in self.expressions.items():
             try:
                 columns_expressions = self.func.evaluate([expr], samples).cpu().numpy()
-                sample_data = np.concatenate(
-                    (sample_data, columns_expressions), axis=1
-                )
+                sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
             except ValueError:
                 raise Exception("Expression " + name +
                                 " cannot be evaluated since there is at least one symbol in the formula, "
@@ -229,8 +239,8 @@ class Explorer:
         which the 2-norm of errors is less than the tolerance.
         """
         equation_output = self.func(samples)
-        tolerances = torch.Tensor(
-            [eqn["tolerance"] for eqn in self.equation_dict],
+        tolerances = torch.tensor(
+            [eqn["tolerance"] for eqn in self.equations.values()],
             device=self.device
         ).reshape((1, -1))
         good_point_idx = (torch.abs(equation_output) < tolerances).all(dim=1)

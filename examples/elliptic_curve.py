@@ -16,6 +16,12 @@
 
 import sympy
 
+# variables
 x = sympy.Symbol("x")
 y = sympy.Symbol("y")
+
+# expressions
+norm = x ** 2 + y ** 2
+
+# equations
 equ = sympy.Eq(y ** 2, x ** 3 - x + 0.3)
