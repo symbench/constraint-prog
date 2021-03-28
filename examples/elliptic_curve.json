@@ -1,7 +1,10 @@
 {
   "source": "elliptic_curve.py",
   "equations": {
-    "equ": {
+    "equ1": {
+      "tolerance": 1e-6
+    },
+    "equ2": {
       "tolerance": 1e-6
     }
   },

@@ -24,4 +24,5 @@ y = sympy.Symbol("y")
 norm = x ** 2 + y ** 2
 
 # equations
-equ = sympy.Eq(y ** 2, x ** 3 - x + 0.3)
+equ1 = sympy.Eq(y ** 2, x ** 3 - x + 0.3)
+equ2 = sympy.LessThan(norm, 4)

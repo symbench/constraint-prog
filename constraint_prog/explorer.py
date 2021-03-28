@@ -322,7 +322,7 @@ def main(args=None):
                         help='Epsilon value for newton method')
     parser.add_argument('--newton-iter', type=int, metavar='NUM', default=10,
                         help='Number of iterations for the newton method')
-    parser.add_argument('--newton-bbox', type=str, default="none",
+    parser.add_argument('--newton-bbox', type=str, default="minmax",
                         choices=["none", "clip", "minmax", "mmclip"],
                         help='Bounding box calculation method')
     parser.add_argument('--gradient-lr', type=int, metavar='NUM', default=0.1,
