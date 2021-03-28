@@ -51,22 +51,58 @@ class SympyFunc(object):
         for arg in expr.args:
             self.add_input_symbols(arg)
 
-    def __call__(self, input_data: torch.tensor) -> torch.tensor:
-        return self.evaluate(self.expressions, input_data)
+    def __call__(self, input_data: torch.tensor,
+                 equs_as_float: bool = True) -> torch.tensor:
+        return self.evaluate(self.expressions, input_data, equs_as_float)
 
     def evaluate(self, expressions: List[sympy.Expr],
-                 input_data: torch.tensor) -> torch.tensor:
+                 input_data: torch.tensor,
+                 equs_as_float: bool = True) -> torch.tensor:
+        """
+        Evaluates the set of expressions using the given input data.
+        If equs_as_float is true, then sympy equations and inequalities
+        are returned as float values that must be zero as opposed to
+        boolean tensors.
+        """
         assert input_data.shape[-1] == len(self.input_names)
         self._input_data = input_data.unbind(dim=-1)
+
         output_data = []
-        for expr in expressions:
-            output_data.append(self._eval(expr))
+        if equs_as_float:
+            for expr in expressions:
+                output_data.append(self._eval_equ_as_sub(expr))
+        else:
+            for expr in expressions:
+                output_data.append(self._eval(expr))
         self._input_data = []
+
         output_data = torch.stack(output_data, dim=-1)
         # zero out bad output data
-        output_data = output_data.nan_to_num(
-            nan=0.0, posinf=1e40, neginf=-1e40)
+        if output_data.dtype == torch.float32 or output_data.dtype == torch.float64:
+            output_data = output_data.nan_to_num(
+                nan=0.0, posinf=1e40, neginf=-1e40)
+
         return output_data
+
+    def _eval_equ_as_sub(self, expr: sympy.Expr) -> torch.tensor:
+        if expr.func == sympy.Eq:
+            assert len(expr.args) == 2
+            value0 = self._eval(expr.args[0])
+            value1 = self._eval(expr.args[1])
+            return torch.sub(value0, value1)
+        elif expr.func == sympy.StrictLessThan or expr.func == sympy.LessThan:
+            assert len(expr.args) == 2
+            value0 = self._eval(expr.args[0])
+            value1 = self._eval(expr.args[1])
+            return torch.sub(value0, value1).clamp_min(0.0)
+        elif expr.func == sympy.StrictGreaterThan or expr.func == sympy.GreaterThan:
+            assert len(expr.args) == 2
+            value0 = self._eval(expr.args[0])
+            value1 = self._eval(expr.args[1])
+            return torch.sub(value0, value1).clamp_max(0.0)
+        else:
+            raise ValueError(
+                "Unknown symbolic expression " + str(type(expr)))
 
     def _eval(self, expr: sympy.Expr) -> torch.tensor:
         if (expr.func == sympy.Integer or expr.func == sympy.Float
@@ -140,27 +176,27 @@ class SympyFunc(object):
             assert len(expr.args) == 2
             value0 = self._eval(expr.args[0])
             value1 = self._eval(expr.args[1])
-            return torch.sub(value0, value1)
+            return value0 == value1
         elif expr.func == sympy.StrictLessThan:
             assert len(expr.args) == 2
-            value1 = self._eval(expr.args[0])
-            value2 = self._eval(expr.args[1])
-            return value1 < value2
+            value0 = self._eval(expr.args[0])
+            value1 = self._eval(expr.args[1])
+            return value0 < value1
         elif expr.func == sympy.LessThan:
             assert len(expr.args) == 2
-            value1 = self._eval(expr.args[0])
-            value2 = self._eval(expr.args[1])
-            return value1 <= value2
+            value0 = self._eval(expr.args[0])
+            value1 = self._eval(expr.args[1])
+            return value0 <= value1
         elif expr.func == sympy.StrictGreaterThan:
             assert len(expr.args) == 2
-            value1 = self._eval(expr.args[0])
-            value2 = self._eval(expr.args[1])
-            return value1 > value2
+            value0 = self._eval(expr.args[0])
+            value1 = self._eval(expr.args[1])
+            return value0 > value1
         elif expr.func == sympy.GreaterThan:
             assert len(expr.args) == 2
-            value1 = self._eval(expr.args[0])
-            value2 = self._eval(expr.args[1])
-            return value1 >= value2
+            value0 = self._eval(expr.args[0])
+            value1 = self._eval(expr.args[1])
+            return value0 >= value1
         elif expr.func == sympy.Piecewise:
             # the fallback case must be fully defined
             assert expr.args[-1][1].func == BooleanTrue
