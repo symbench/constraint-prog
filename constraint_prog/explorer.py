@@ -56,8 +56,6 @@ class Explorer:
         with open(problem_json) as f:
             self.json_content = json.loads(f.read())
 
-        self.tolerance = self.json_content["tolerance"]
-
         self.equations = dict()
         self.expressions = dict()
         self.get_equations_and_expressions()
@@ -87,6 +85,7 @@ class Explorer:
         self.tolerances = torch.tensor(
             [equ["tolerance"] for equ in self.equations.values()],
             device=self.device)
+        self.tolerances *= self.json_content["global_tolerance"]
         self.scaled_func = Scaler(self.func, 1.0 / self.tolerances)
 
     def process_constraints(self) -> dict:
@@ -245,11 +244,11 @@ class Explorer:
 
     def check_tolerance(self, samples: torch.tensor) -> torch.tensor:
         """
-        Evaluates the given list fo designs and returns a new list for
-        which the 2-norm of errors is less than the tolerance.
+        Evaluates the given list of designs and returns a new list for
+        which the absolute errors is less than the tolerance.
         """
         equation_output = self.func(samples)
-        good_point_idx = torch.norm(equation_output, dim=1) < self.tolerance
+        good_point_idx = (equation_output.abs() < self.tolerances).all(dim=-1)
         return samples[good_point_idx]
 
     def prune_close_points(self, output_data: torch.tensor) -> torch.tensor:

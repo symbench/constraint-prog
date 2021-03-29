@@ -1,21 +1,21 @@
 {
     "source": "uuv_ver1.py",
-    "tolerance": 1e-3,
+    "global_tolerance": 1.0,
     "equations": {
         "-neutral_buoyancy_constraint": {
-            "tolerance": 1e-6
+            "tolerance": 1e-3
         },
         "internal_hull_volume_constraint": {
-            "tolerance": 1e-6
+            "tolerance": 1e-3
         },
         "hull_integrity_constraint": {
-            "tolerance": 1e-6
+            "tolerance": 1e-3
         },
         "-propulsion_fluid_volume_constraint": {
-            "tolerance": 1e-6
+            "tolerance": 1e-3
         },
         "-power_supply_constraint": {
-            "tolerance": 1e-6
+            "tolerance": 1e-3
         }
     },
     "variables": {
