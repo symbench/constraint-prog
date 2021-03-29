@@ -14,11 +14,31 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List
+from typing import Callable, List
 
 import torch
 import sympy
 from sympy.logic.boolalg import BooleanTrue, BooleanFalse
+
+
+class Scaler(object):
+    """
+    A callable wrapper object for SympyFunc, allowing to scale
+    equations.
+    """
+
+    def __init__(self, func: Callable, scaling: torch.tensor):
+        """
+        The scaling must be a tensor of shape [output_size].
+        """
+        self.func = func
+        assert scaling.ndim == 1
+        self.scaling = scaling
+
+    def __call__(self, input_data: torch.tensor,
+                 equs_as_float: bool = True) -> torch.tensor:
+        output_data = self.func(input_data, equs_as_float)
+        return output_data * self.scaling
 
 
 class SympyFunc(object):
@@ -57,7 +77,7 @@ class SympyFunc(object):
 
     def evaluate(self, expressions: List[sympy.Expr],
                  input_data: torch.tensor,
-                 equs_as_float: bool = True) -> torch.tensor:
+                 equs_as_float: bool) -> torch.tensor:
         """
         Evaluates the set of expressions using the given input data.
         If equs_as_float is true, then sympy equations and inequalities

@@ -1,11 +1,12 @@
 {
   "source": "elliptic_curve.py",
+  "global_tolerance": 1.0,
   "equations": {
     "equ1": {
-      "tolerance": 1e-6
+      "tolerance": 1e-3
     },
     "equ2": {
-      "tolerance": 1e-6
+      "tolerance": 1e-3
     }
   },
   "variables": {

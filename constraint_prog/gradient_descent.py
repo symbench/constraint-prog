@@ -19,6 +19,46 @@ from typing import Callable
 import torch
 
 
+class TorchStandardScaler:
+    """
+    Standard scaler class using torch data methods
+    """
+    def __init__(self):
+        self.mean = None
+        self.std = None
+
+    def fit(self, x: torch.Tensor) -> None:
+        """
+        Calculate mean and std for data to standardize
+        :param x: torch.Tensor data to standardize
+        :return: None
+        """
+        self.mean = x.mean(0, keepdim=True)
+        self.std = x.std(0, unbiased=False, keepdim=True)
+
+    def transform(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Execute standardization
+        :param x: torch.Tensor data to standardize
+        :return: torch.Tensor standardized data
+        """
+        x = torch.clone(x)
+        x -= self.mean
+        x /= (self.std + 1e-7)
+        return x
+
+    def rescale(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Execute standardization
+        :param x: torch.Tensor data to standardize
+        :return: torch.Tensor standardized data
+        """
+        x = torch.clone(x)
+        x *= (self.std + 1e-7)
+        x += self.mean
+        return x
+
+
 def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
                      lrate: float, device: torch.device) -> torch.Tensor:
     """
@@ -28,20 +68,26 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
     [*, output_size].
     The returned tensor is of shape [*, input_size].
     """
+    scaler = TorchStandardScaler()
+    scaler.fit(x=in_data)
+    scaled_in_data = scaler.transform(x=in_data)
 
     inp_data = torch.clone(
-        in_data.reshape(-1, in_data.shape[-1]).to(device)
+        scaled_in_data.reshape(-1, scaled_in_data.shape[-1]).to(device)
     )
     inp_data.requires_grad = True
     for _ in range(it):
-        val = f(inp_data).pow(2).sum(dim=-1)
+        inp_data0 = scaler.rescale(x=inp_data)
+
+        val = (f(inp_data0).pow(2.0).sum(dim=-1)).pow(0.5)
         inp_data.grad = torch.autograd.grad(
             outputs=val,
-            inputs=inp_data,
+            inputs=inp_data0,
             grad_outputs=torch.ones(inp_data.shape[0]).to(device)
         )[0]
+
         with torch.no_grad():
             inp_data -= lrate * inp_data.grad
         inp_data.grad.zero_()
 
-    return inp_data.cpu().detach().reshape(in_data.shape)
+    return scaler.rescale(inp_data)

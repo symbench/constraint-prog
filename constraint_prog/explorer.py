@@ -26,7 +26,7 @@ import numpy as np
 import sympy
 import torch
 
-from constraint_prog.sympy_func import SympyFunc
+from constraint_prog.sympy_func import SympyFunc, Scaler
 from constraint_prog.gradient_descent import gradient_descent
 from constraint_prog.newton_raphson import newton_raphson
 
@@ -64,8 +64,9 @@ class Explorer:
         constraints = self.process_constraints()
 
         self.func = SympyFunc(
-            [equ["expr"] for equ in self.equations.values()],
+            expressions=[equ["expr"] for equ in self.equations.values()],
             device=self.device)
+
         # disregard entries that are unused in any equations
         for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
             del constraints[unused_key]
@@ -81,7 +82,13 @@ class Explorer:
             [constraints[var]["resolution"]for var in self.func.input_names],
             device=self.device)
 
-    def process_constraints(self):
+        self.tolerances = torch.tensor(
+            [equ["tolerance"] for equ in self.equations.values()],
+            device=self.device)
+        self.tolerances *= self.json_content["global_tolerance"]
+        self.scaled_func = Scaler(self.func, 1.0 / self.tolerances)
+
+    def process_constraints(self) -> dict:
         # disregard entries that start with a dash
         constraints = {key: val
                        for (key, val) in self.json_content["variables"].items()
@@ -101,7 +108,7 @@ class Explorer:
 
         return constraints
 
-    def get_equations_and_expressions(self):
+    def get_equations_and_expressions(self) -> None:
         path = os.path.join(
             os.path.dirname(self.problem_json), self.json_content["source"])
         print("Loading python file:", path)
@@ -113,10 +120,10 @@ class Explorer:
         spec.loader.exec_module(equmod)
         members = getmembers(equmod)
 
-        def find_member(name):
-            for member in members:
-                if member[0] == name:
-                    return member[1]
+        def find_member(name_):
+            for member_ in members:
+                if member_[0] == name_:
+                    return member_[1]
             return None
 
         self.equations.clear()
@@ -131,6 +138,7 @@ class Explorer:
                     isinstance(member, sympy.StrictLessThan) or
                     isinstance(member, sympy.GreaterThan) or
                     isinstance(member, sympy.StrictGreaterThan))
+
             self.equations[name] = {
                 "expr": member,
                 "tolerance": conf["tolerance"]
@@ -145,13 +153,13 @@ class Explorer:
                 raise ValueError("expression " + name + " not found")
             self.expressions[name] = member
 
-    def print_equations(self):
+    def print_equations(self) -> None:
         print("Loaded equations:")
         for eq in self.equations:
             print(eq)
         print("Variable names:", ', '.join(self.func.input_names))
 
-    def run(self):
+    def run(self) -> None:
         input_data = self.generate_input().to(self.device)
 
         print("Running {} method on {} many design points".format(
@@ -160,14 +168,14 @@ class Explorer:
         if self.method == "newton":
             bounding_box = torch.cat(
                 (self.constraints_min, self.constraints_max))
-            output_data = newton_raphson(func=self.func,
+            output_data = newton_raphson(func=self.scaled_func,
                                          input_data=input_data,
                                          num_iter=self.newton_iter,
                                          epsilon=self.newton_eps,
                                          bounding_box=bounding_box,
                                          method=self.newton_bbox)
         elif self.method == "gradient":
-            output_data = gradient_descent(f=self.func,
+            output_data = gradient_descent(f=self.scaled_func,
                                            in_data=input_data,
                                            it=self.gradient_iter,
                                            lrate=self.gradient_lr,
@@ -197,7 +205,7 @@ class Explorer:
         sample_vars = deepcopy(self.func.input_names)
         sample_vars.extend(list(self.fixed_values.keys()))
         sample_vars.extend(list(self.expressions.keys()))
-        sample_data = samples.cpu().numpy()
+        sample_data = samples.detach().cpu().numpy()
         columns_fixed_values = np.repeat(
             np.array([list(self.fixed_values.values())]),
             sample_data.shape[0],
@@ -210,7 +218,7 @@ class Explorer:
         for name, expr in self.expressions.items():
             try:
                 columns_expressions = self.func.evaluate(
-                    [expr], samples, equs_as_float=False).cpu().numpy()
+                    [expr], samples, equs_as_float=False).detach().cpu().numpy()
             except ValueError as err:
                 raise Exception("Expression " + name + " cannot be evaluated: " + str(err))
             sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
@@ -225,7 +233,7 @@ class Explorer:
                                 sample_vars=sample_vars,
                                 sample_data=sample_data)
 
-    def generate_input(self):
+    def generate_input(self) -> torch.tensor:
         """Generates input data with uniform distribution."""
         sample = torch.rand(
             size=(self.max_points, self.func.input_size),
@@ -234,20 +242,16 @@ class Explorer:
         sample += self.constraints_min
         return sample
 
-    def check_tolerance(self, samples: torch.tensor):
+    def check_tolerance(self, samples: torch.tensor) -> torch.tensor:
         """
-        Evaluates the given list fo designs and returns a new list for
-        which the 2-norm of errors is less than the tolerance.
+        Evaluates the given list of designs and returns a new list for
+        which the absolute errors is less than the tolerance.
         """
         equation_output = self.func(samples)
-        tolerances = torch.tensor(
-            [eqn["tolerance"] for eqn in self.equations.values()],
-            device=self.device
-        ).reshape((1, -1))
-        good_point_idx = (torch.abs(equation_output) < tolerances).all(dim=1)
+        good_point_idx = (equation_output.abs() < self.tolerances).all(dim=-1)
         return samples[good_point_idx]
 
-    def prune_close_points(self, output_data: torch.tensor):
+    def prune_close_points(self, output_data: torch.tensor) -> torch.tensor:
         output_data_tile = torch.tile(
             output_data, (output_data.shape[0], 1, 1))
         output_data_1kn = output_data.reshape(
@@ -274,7 +278,7 @@ class Explorer:
         # TODO: from close and different point sets remove all except one
         return output_data
 
-    def prune_close_points2(self, samples: torch.tensor):
+    def prune_close_points2(self, samples: torch.tensor) -> torch.tensor:
         assert samples.ndim == 2 and samples.shape[1] == len(self.constraints_res)
         rounded = samples / self.constraints_res.reshape((1, samples.shape[1]))
         rounded = rounded.round().type(torch.int64)
@@ -296,7 +300,7 @@ class Explorer:
 
         return samples[selected.to(samples.device)]
 
-    def prune_bounding_box(self, samples: torch.tensor):
+    def prune_bounding_box(self, samples: torch.tensor) -> torch.tensor:
         assert samples.ndim == 2
         selected = torch.logical_and(samples >= self.constraints_min,
                                      samples <= self.constraints_max)
@@ -325,7 +329,7 @@ def main(args=None):
     parser.add_argument('--newton-bbox', type=str, default="minmax",
                         choices=["none", "clip", "minmax", "mmclip"],
                         help='Bounding box calculation method')
-    parser.add_argument('--gradient-lr', type=int, metavar='NUM', default=0.1,
+    parser.add_argument('--gradient-lr', type=float, metavar='NUM', default=0.1,
                         help='Learning rate value for gradient method')
     parser.add_argument('--gradient-iter', type=int, metavar='NUM', default=100,
                         help='Number of iterations for the gradient method')
