@@ -44,4 +44,4 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
             inp_data -= lrate * inp_data.grad
         inp_data.grad.zero_()
 
-    return inp_data.cpu().detach().reshape(in_data.shape)
+    return inp_data

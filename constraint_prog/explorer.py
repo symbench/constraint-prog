@@ -208,7 +208,7 @@ class Explorer:
         sample_vars = deepcopy(self.func.input_names)
         sample_vars.extend(list(self.fixed_values.keys()))
         sample_vars.extend(list(self.expressions.keys()))
-        sample_data = samples.cpu().numpy()
+        sample_data = samples.detach().cpu().numpy()
         columns_fixed_values = np.repeat(
             np.array([list(self.fixed_values.values())]),
             sample_data.shape[0],
@@ -221,7 +221,7 @@ class Explorer:
         for name, expr in self.expressions.items():
             try:
                 columns_expressions = self.func.evaluate(
-                    [expr], samples, equs_as_float=False).cpu().numpy()
+                    [expr], samples, equs_as_float=False).detach().cpu().numpy()
             except ValueError as err:
                 raise Exception("Expression " + name + " cannot be evaluated: " + str(err))
             sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
