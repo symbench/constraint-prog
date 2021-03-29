@@ -67,6 +67,7 @@ class Explorer:
 
         self.func = SympyFunc(
             expressions=[equ["expr"] for equ in self.equations.values()],
+            tolerances=[equ["tolerance"] for equ in self.equations.values()],
             device=self.device
         )
         # disregard entries that are unused in any equations
@@ -137,7 +138,7 @@ class Explorer:
 
             tolerance = conf["tolerance"]
             self.equations[name] = {
-                "expr": self.get_scaled_member(member=member, tolerance=tolerance),
+                "expr": member,
                 "tolerance": tolerance
             }
 
@@ -155,12 +156,6 @@ class Explorer:
         for eq in self.equations:
             print(eq)
         print("Variable names:", ', '.join(self.func.input_names))
-
-    @staticmethod
-    def get_scaled_member(member, tolerance):
-        return sympy.Eq(sympy.Mul(member.args[0], sympy.Float(1 / tolerance)),
-                        sympy.Mul(member.args[1], sympy.Float(1 / tolerance))
-                        )
 
     def run(self):
         input_data = self.generate_input().to(self.device)

@@ -21,6 +21,20 @@ import sympy
 from sympy.logic.boolalg import BooleanTrue, BooleanFalse
 
 
+class Scaler:
+    """
+    A callable wrapper object, which applies scaling
+    on output of call in SymPyFunc based on
+    tolerance values given for all constraints
+    """
+    def __init__(self, tolerances):
+        self.tolerances = torch.Tensor(tolerances).reshape((1, -1))
+
+    def __call__(self, input_data):
+        output_data = input_data / self.tolerances.to(input_data.device)
+        return output_data
+
+
 class SympyFunc(object):
     """
     A callable object created from a list of sympy symbolic expressions.
@@ -29,7 +43,8 @@ class SympyFunc(object):
     the number of symbols and output_size is the number of expressions.
     """
 
-    def __init__(self, expressions: List[sympy.Expr], device=None):
+    def __init__(self, expressions: List[sympy.Expr], tolerances: List[float],
+                 device=None):
         self.expressions = expressions
         self.device = device
 
@@ -39,6 +54,8 @@ class SympyFunc(object):
         assert self.input_names
         self.input_names = sorted(self.input_names)
         self._input_data = []
+
+        self.scaler = Scaler(tolerances=tolerances)
 
     def add_input_symbols(self, expr: sympy.Expr):
         """
@@ -53,7 +70,7 @@ class SympyFunc(object):
 
     def __call__(self, input_data: torch.tensor,
                  equs_as_float: bool = True) -> torch.tensor:
-        return self.evaluate(self.expressions, input_data, equs_as_float)
+        return self.scaler(self.evaluate(self.expressions, input_data, equs_as_float))
 
     def evaluate(self, expressions: List[sympy.Expr],
                  input_data: torch.tensor,
