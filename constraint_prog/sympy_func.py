@@ -14,25 +14,31 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List
+from typing import Callable, List
 
 import torch
 import sympy
 from sympy.logic.boolalg import BooleanTrue, BooleanFalse
 
 
-class Scaler:
+class Scaler(object):
     """
-    A callable wrapper object, which applies scaling
-    on output of call in SymPyFunc based on
-    tolerance values given for all constraints
+    A callable wrapper object for SympyFunc, allowing to scale
+    equations.
     """
-    def __init__(self, tolerances):
-        self.tolerances = torch.Tensor(tolerances).reshape((1, -1))
 
-    def __call__(self, input_data):
-        output_data = input_data / self.tolerances.to(input_data.device)
-        return output_data
+    def __init__(self, func: Callable, scaling: torch.tensor):
+        """
+        The scaling must be a tensor of shape [output_size].
+        """
+        self.func = func
+        assert scaling.ndim == 1
+        self.scaling = scaling
+
+    def __call__(self, input_data: torch.tensor,
+                 equs_as_float: bool = True) -> torch.tensor:
+        output_data = self.func(input_data, equs_as_float)
+        return output_data * self.scaling
 
 
 class SympyFunc(object):
@@ -43,8 +49,7 @@ class SympyFunc(object):
     the number of symbols and output_size is the number of expressions.
     """
 
-    def __init__(self, expressions: List[sympy.Expr], tolerances: List[float],
-                 device=None):
+    def __init__(self, expressions: List[sympy.Expr], device=None):
         self.expressions = expressions
         self.device = device
 
@@ -54,8 +59,6 @@ class SympyFunc(object):
         assert self.input_names
         self.input_names = sorted(self.input_names)
         self._input_data = []
-
-        self.scaler = Scaler(tolerances=tolerances)
 
     def add_input_symbols(self, expr: sympy.Expr):
         """
@@ -70,11 +73,11 @@ class SympyFunc(object):
 
     def __call__(self, input_data: torch.tensor,
                  equs_as_float: bool = True) -> torch.tensor:
-        return self.scaler(self.evaluate(self.expressions, input_data, equs_as_float))
+        return self.evaluate(self.expressions, input_data, equs_as_float)
 
     def evaluate(self, expressions: List[sympy.Expr],
                  input_data: torch.tensor,
-                 equs_as_float: bool = True) -> torch.tensor:
+                 equs_as_float: bool) -> torch.tensor:
         """
         Evaluates the set of expressions using the given input data.
         If equs_as_float is true, then sympy equations and inequalities

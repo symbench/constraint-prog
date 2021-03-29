@@ -26,7 +26,7 @@ import numpy as np
 import sympy
 import torch
 
-from constraint_prog.sympy_func import SympyFunc
+from constraint_prog.sympy_func import SympyFunc, Scaler
 from constraint_prog.gradient_descent import gradient_descent
 from constraint_prog.newton_raphson import newton_raphson
 
@@ -67,9 +67,8 @@ class Explorer:
 
         self.func = SympyFunc(
             expressions=[equ["expr"] for equ in self.equations.values()],
-            tolerances=[equ["tolerance"] for equ in self.equations.values()],
-            device=self.device
-        )
+            device=self.device)
+
         # disregard entries that are unused in any equations
         for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
             del constraints[unused_key]
@@ -84,6 +83,11 @@ class Explorer:
         self.constraints_res = torch.tensor(
             [constraints[var]["resolution"]for var in self.func.input_names],
             device=self.device)
+
+        self.tolerances = torch.tensor(
+            [equ["tolerance"] for equ in self.equations.values()],
+            device=self.device)
+        self.scaled_func = Scaler(self.func, 1.0 / self.tolerances)
 
     def process_constraints(self) -> dict:
         # disregard entries that start with a dash
@@ -165,14 +169,14 @@ class Explorer:
         if self.method == "newton":
             bounding_box = torch.cat(
                 (self.constraints_min, self.constraints_max))
-            output_data = newton_raphson(func=self.func,
+            output_data = newton_raphson(func=self.scaled_func,
                                          input_data=input_data,
                                          num_iter=self.newton_iter,
                                          epsilon=self.newton_eps,
                                          bounding_box=bounding_box,
                                          method=self.newton_bbox)
         elif self.method == "gradient":
-            output_data = gradient_descent(f=self.func,
+            output_data = gradient_descent(f=self.scaled_func,
                                            in_data=input_data,
                                            it=self.gradient_iter,
                                            lrate=self.gradient_lr,
