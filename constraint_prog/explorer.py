@@ -85,7 +85,7 @@ class Explorer:
             [constraints[var]["resolution"]for var in self.func.input_names],
             device=self.device)
 
-    def process_constraints(self):
+    def process_constraints(self) -> dict:
         # disregard entries that start with a dash
         constraints = {key: val
                        for (key, val) in self.json_content["variables"].items()
@@ -105,7 +105,7 @@ class Explorer:
 
         return constraints
 
-    def get_equations_and_expressions(self):
+    def get_equations_and_expressions(self) -> None:
         path = os.path.join(
             os.path.dirname(self.problem_json), self.json_content["source"])
         print("Loading python file:", path)
@@ -117,10 +117,10 @@ class Explorer:
         spec.loader.exec_module(equmod)
         members = getmembers(equmod)
 
-        def find_member(name):
-            for member in members:
-                if member[0] == name:
-                    return member[1]
+        def find_member(name_):
+            for member_ in members:
+                if member_[0] == name_:
+                    return member_[1]
             return None
 
         self.equations.clear()
@@ -136,10 +136,9 @@ class Explorer:
                     isinstance(member, sympy.GreaterThan) or
                     isinstance(member, sympy.StrictGreaterThan))
 
-            tolerance = conf["tolerance"]
             self.equations[name] = {
                 "expr": member,
-                "tolerance": tolerance
+                "tolerance": conf["tolerance"]
             }
 
         self.expressions.clear()
@@ -151,13 +150,13 @@ class Explorer:
                 raise ValueError("expression " + name + " not found")
             self.expressions[name] = member
 
-    def print_equations(self):
+    def print_equations(self) -> None:
         print("Loaded equations:")
         for eq in self.equations:
             print(eq)
         print("Variable names:", ', '.join(self.func.input_names))
 
-    def run(self):
+    def run(self) -> None:
         input_data = self.generate_input().to(self.device)
 
         print("Running {} method on {} many design points".format(
@@ -231,7 +230,7 @@ class Explorer:
                                 sample_vars=sample_vars,
                                 sample_data=sample_data)
 
-    def generate_input(self):
+    def generate_input(self) -> torch.tensor:
         """Generates input data with uniform distribution."""
         sample = torch.rand(
             size=(self.max_points, self.func.input_size),
@@ -240,7 +239,7 @@ class Explorer:
         sample += self.constraints_min
         return sample
 
-    def check_tolerance(self, samples: torch.tensor):
+    def check_tolerance(self, samples: torch.tensor) -> torch.tensor:
         """
         Evaluates the given list fo designs and returns a new list for
         which the 2-norm of errors is less than the tolerance.
@@ -249,7 +248,7 @@ class Explorer:
         good_point_idx = torch.norm(equation_output, dim=1) < self.tolerance
         return samples[good_point_idx]
 
-    def prune_close_points(self, output_data: torch.tensor):
+    def prune_close_points(self, output_data: torch.tensor) -> torch.tensor:
         output_data_tile = torch.tile(
             output_data, (output_data.shape[0], 1, 1))
         output_data_1kn = output_data.reshape(
@@ -276,7 +275,7 @@ class Explorer:
         # TODO: from close and different point sets remove all except one
         return output_data
 
-    def prune_close_points2(self, samples: torch.tensor):
+    def prune_close_points2(self, samples: torch.tensor) -> torch.tensor:
         assert samples.ndim == 2 and samples.shape[1] == len(self.constraints_res)
         rounded = samples / self.constraints_res.reshape((1, samples.shape[1]))
         rounded = rounded.round().type(torch.int64)
@@ -298,7 +297,7 @@ class Explorer:
 
         return samples[selected.to(samples.device)]
 
-    def prune_bounding_box(self, samples: torch.tensor):
+    def prune_bounding_box(self, samples: torch.tensor) -> torch.tensor:
         assert samples.ndim == 2
         selected = torch.logical_and(samples >= self.constraints_min,
                                      samples <= self.constraints_max)
