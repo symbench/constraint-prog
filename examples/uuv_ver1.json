@@ -1,5 +1,6 @@
 {
     "source": "uuv_ver1.py",
+    "tolerance": 1e-3,
     "equations": {
         "-neutral_buoyancy_constraint": {
             "tolerance": 1e-6

@@ -1,5 +1,6 @@
 {
   "source": "elliptic_curve.py",
+  "tolerance": 1e-3,
   "equations": {
     "equ1": {
       "tolerance": 1e-6

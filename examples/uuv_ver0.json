@@ -1,5 +1,6 @@
 {
   "source": "uuv_ver0.py",
+  "tolerance": 1e-3,
   "equations": {
     "mission_duration_equation": {
       "tolerance": 1e-6

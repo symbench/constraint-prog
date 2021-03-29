@@ -56,6 +56,8 @@ class Explorer:
         with open(problem_json) as f:
             self.json_content = json.loads(f.read())
 
+        self.tolerance = self.json_content["tolerance"]
+
         self.equations = dict()
         self.expressions = dict()
         self.get_equations_and_expressions()
@@ -64,8 +66,9 @@ class Explorer:
         constraints = self.process_constraints()
 
         self.func = SympyFunc(
-            [equ["expr"] for equ in self.equations.values()],
-            device=self.device)
+            expressions=[equ["expr"] for equ in self.equations.values()],
+            device=self.device
+        )
         # disregard entries that are unused in any equations
         for unused_key in np.setdiff1d(sorted(constraints.keys()), self.func.input_names):
             del constraints[unused_key]
@@ -131,9 +134,11 @@ class Explorer:
                     isinstance(member, sympy.StrictLessThan) or
                     isinstance(member, sympy.GreaterThan) or
                     isinstance(member, sympy.StrictGreaterThan))
+
+            tolerance = conf["tolerance"]
             self.equations[name] = {
-                "expr": member,
-                "tolerance": conf["tolerance"]
+                "expr": self.get_scaled_member(member=member, tolerance=tolerance),
+                "tolerance": tolerance
             }
 
         self.expressions.clear()
@@ -150,6 +155,12 @@ class Explorer:
         for eq in self.equations:
             print(eq)
         print("Variable names:", ', '.join(self.func.input_names))
+
+    @staticmethod
+    def get_scaled_member(member, tolerance):
+        return sympy.Eq(sympy.Mul(member.args[0], sympy.Float(1 / tolerance)),
+                        sympy.Mul(member.args[1], sympy.Float(1 / tolerance))
+                        )
 
     def run(self):
         input_data = self.generate_input().to(self.device)
@@ -240,11 +251,7 @@ class Explorer:
         which the 2-norm of errors is less than the tolerance.
         """
         equation_output = self.func(samples)
-        tolerances = torch.tensor(
-            [eqn["tolerance"] for eqn in self.equations.values()],
-            device=self.device
-        ).reshape((1, -1))
-        good_point_idx = (torch.abs(equation_output) < tolerances).all(dim=1)
+        good_point_idx = torch.norm(equation_output, dim=1) < self.tolerance
         return samples[good_point_idx]
 
     def prune_close_points(self, output_data: torch.tensor):
