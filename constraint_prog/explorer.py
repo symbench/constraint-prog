@@ -332,7 +332,7 @@ def main(args=None):
     parser.add_argument('--newton-bbox', type=str, default="minmax",
                         choices=["none", "clip", "minmax", "mmclip"],
                         help='Bounding box calculation method')
-    parser.add_argument('--gradient-lr', type=int, metavar='NUM', default=0.1,
+    parser.add_argument('--gradient-lr', type=float, metavar='NUM', default=0.1,
                         help='Learning rate value for gradient method')
     parser.add_argument('--gradient-iter', type=int, metavar='NUM', default=100,
                         help='Number of iterations for the gradient method')
