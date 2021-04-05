@@ -1,5 +1,5 @@
 {
-    "source": "uuv_ver1.py",
+    "source": "str_transit_vehicle.py",
     "global_tolerance": 1.0,
     "equations": {
         "mission_duration_constraint": {
@@ -28,43 +28,46 @@
         },
         "payload_length_constraint": {
             "tolerance": 1e-3
+        },
+        "external_hull_volume_constraint": {
+            "tolerance": 1e-3
         }
     },
     "variables": {
         "salinity": {
             "__help__": "real-world min/max: [0, 45] PSU",
-            "min": 35.0,
-            "max": 35.0,
+            "min": 34.0,
+            "max": 34.0,
             "resolution": 0.1
         },
         "water_temperature": {
             "__help__": "real-world min/max: [-2, 35] C",
-            "min": 10.0,
-            "max": 10.0,
+            "min": -1.0,
+            "max": -1.0,
             "resolution": 0.1
         },
         "dive_depth": {
             "__help__": "real-world min/max: [0, 11000] m",
-            "min": 2000.0,
-            "max": 2000.0,
+            "min": 3000.0,
+            "max": 3000.0,
             "resolution": 0.3
         },
         "horizontal_range": {
             "__help__": "real-world min/max: [10, 2000000] m",
-            "min": 500000.0,
-            "max": 500000.0,
+            "min": 1000000.0,
+            "max": 1000000.0,
             "resolution": 1.0
         },
         "time_endurance": {
             "__help__": "real-world min/max: [600, 15768000] s",
-            "min": 86400.0,
+            "min": 1000000.0,
             "max": 2592000.0,
             "resolution": 60.0
         },
         "mission_latitude": {
             "__help__": "real-world min/max: [-90, 90] deg",
-            "min": 45.0,
-            "max": 45.0,
+            "min": 80.0,
+            "max": 80.0,
             "resolution": 0.1
         },
         "nominal_horizontal_speed": {
@@ -75,8 +78,8 @@
         },
         "maximum_horizontal_speed": {
             "__help__": "real-world min/max: [0.01, 3.0] m/s",
-            "min": 1.0,
-            "max": 1.0,
+            "min": 1.5,
+            "max": 1.5,
             "resolution": 0.1
         },
         "hull_thickness": {
@@ -87,14 +90,14 @@
         },
         "hull_length_external": {
             "__help__": "real-world min/max: [0.3, 6.0] m",
-            "min": 0.3,
+            "min": 1.0,
             "max": 6.0,
-            "resolution": 0.1
+            "resolution": 0.01
         },
         "hull_radius_external": {
             "__help__": "real-world min/max: [0.15, 1.5] m",
             "min": 0.125,
-            "max": 0.125,
+            "max": 3.0,
             "resolution": 0.01
         },
         "hull_material_yield": {
@@ -111,37 +114,37 @@
         },
         "payload_length": {
             "__help__": "real-world min/max: [0, 6] m",
-            "min": 0.15,
-            "max": 0.15,
+            "min": 2.0,
+            "max": 2.0,
             "resolution": 0.01
         },
         "payload_mass": {
             "__help__": "real-world min/max: [0, 500] kg",
-            "min": 0.0,
-            "max": 50.0,
+            "min": 40.0,
+            "max": 40.0,
             "resolution": 0.1
         },
         "payload_power": {
             "__help__": "real-world min/max: [0, 100] W",
-            "min": 2.3,
-            "max": 2.3,
+            "min": 0.0,
+            "max": 0.0,
             "resolution": 0.1
         },
         "hotel_volume": {
             "__help__": "real-world min/max: [0, 15] m^3",
-            "min": 0.0,
-            "max": 3.0,
+            "min": 0.01,
+            "max": 0.01,
             "resolution": 0.01
         },
         "hotel_mass": {
             "__help__": "real-world min/max: [0, 500] kg",
-            "min": 0.0,
-            "max": 50.0,
+            "min": 1.0,
+            "max": 1.0,
             "resolution": 0.1
         },
         "hotel_power": {
             "__help__": "real-world min/max: [0, 100] W",
-            "min": 0.0,
+            "min": 10.0,
             "max": 10.0,
             "resolution": 0.1
         },
@@ -154,7 +157,7 @@
         "propulsion_fluid_volume": {
             "__help__": "real-world min/max: [0, 100] m^3",
             "min": 0.0,
-            "max": 1.0,
+            "max": 2.5,
             "resolution": 0.01
         },
         "propulsion_engine_efficiency": {
@@ -183,38 +186,38 @@
         },
         "battery_cell_mass": {
             "__help__": "real-world min/max: [0.001, 0.5] kg",
-            "min": 0.135,
-            "max": 0.135,
+            "min": 0.109,
+            "max": 0.109,
             "resolution": 0.001
         },
         "battery_cell_quantity": {
             "__help__": "real-world min/max: [0, Inf]",
-            "min": 0,
-            "max": 10000,
+            "min": 1000,
+            "max": 1000,
             "resolution": 1
         },
         "wing_mass": {
             "__help__": "real-world min/max: [0.1, 100] kg",
             "min": 0.1,
-            "max": 100.0,
+            "max": 2.0,
             "resolution": 0.1
         },
         "wing_area": {
             "__help__": "real-world min/max: [0, 50] m^2",
-            "min": 0.0,
-            "max": 50.0,
+            "min": 3.0,
+            "max": 3.0,
             "resolution": 0.01
         },
         "wing_volume": {
             "__help__": "real-world min/max: [0, 100] m^3",
             "min": 0.0,
-            "max": 100.0,
+            "max": 0.0,
             "resolution": 0.01
         },
         "wing_span": {
             "__help__": "real-world min/max: [0, 25] m",
-            "min": 0.0,
-            "max": 25.0,
+            "min": 6.0,
+            "max": 6.0,
             "resolution": 0.01
         },
         "wing_span_efficiency": {
@@ -224,5 +227,7 @@
             "resolution": 0.01
         }
     },
-    "expressions": []
+    "expressions": [
+        "hull_volume_external"
+    ]
 }

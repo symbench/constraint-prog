@@ -1,5 +1,5 @@
 {
-    "source": "uuv_ver1.py",
+    "source": "str_sampling_vehicle.py",
     "global_tolerance": 1.0,
     "equations": {
         "mission_duration_constraint": {
@@ -33,41 +33,35 @@
     "variables": {
         "salinity": {
             "__help__": "real-world min/max: [0, 45] PSU",
-            "min": 35.0,
-            "max": 35.0,
+            "min": 34.0,
+            "max": 34.0,
             "resolution": 0.1
         },
         "water_temperature": {
             "__help__": "real-world min/max: [-2, 35] C",
-            "min": 10.0,
-            "max": 10.0,
+            "min": -1.0,
+            "max": -1.0,
             "resolution": 0.1
         },
         "dive_depth": {
             "__help__": "real-world min/max: [0, 11000] m",
-            "min": 2000.0,
-            "max": 2000.0,
+            "min": 3000.0,
+            "max": 3000.0,
             "resolution": 0.3
-        },
-        "horizontal_range": {
-            "__help__": "real-world min/max: [10, 2000000] m",
-            "min": 500000.0,
-            "max": 500000.0,
-            "resolution": 1.0
         },
         "time_endurance": {
             "__help__": "real-world min/max: [600, 15768000] s",
-            "min": 86400.0,
-            "max": 2592000.0,
+            "min": 604800.0,
+            "max": 604800.0,
             "resolution": 60.0
         },
         "mission_latitude": {
             "__help__": "real-world min/max: [-90, 90] deg",
-            "min": 45.0,
-            "max": 45.0,
+            "min": 85.0,
+            "max": 85.0,
             "resolution": 0.1
         },
-        "nominal_horizontal_speed": {
+        "nominal_vertical_speed": {
             "__help__": "real-world min/max: [0.01, 2.0] m/s",
             "min": 0.5,
             "max": 0.5,
@@ -87,14 +81,14 @@
         },
         "hull_length_external": {
             "__help__": "real-world min/max: [0.3, 6.0] m",
-            "min": 0.3,
+            "min": 0.5,
             "max": 6.0,
-            "resolution": 0.1
+            "resolution": 0.01
         },
         "hull_radius_external": {
             "__help__": "real-world min/max: [0.15, 1.5] m",
             "min": 0.125,
-            "max": 0.125,
+            "max": 2.0,
             "resolution": 0.01
         },
         "hull_material_yield": {
@@ -183,8 +177,8 @@
         },
         "battery_cell_mass": {
             "__help__": "real-world min/max: [0.001, 0.5] kg",
-            "min": 0.135,
-            "max": 0.135,
+            "min": 0.109,
+            "max": 0.109,
             "resolution": 0.001
         },
         "battery_cell_quantity": {

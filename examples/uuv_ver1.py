@@ -28,6 +28,9 @@ AVERAGE_COEFFICIENT_OF_LIFT = 0.55
 MATERIAL_YIELD_SAFETY_FACTOR = 0.8
 BUOYANCY_FLUID_SAFETY_FACTOR = 1.25
 BATTERY_CAPACITY_SAFETY_FACTOR = 0.8
+PUMP_DURATION_INCREASE_FACTOR = 1.1
+FINENESS_RATIO_MIN = 5.0
+FINENESS_RATIO_MAX = 9.0
 
 
 # DESIGN PARAMETERS ---------------------------------------------------------------------------------------------------
@@ -39,13 +42,12 @@ horizontal_range = sympy.Symbol('horizontal_range')  # m
 time_endurance = sympy.Symbol('time_endurance')  # s
 mission_latitude = sympy.Symbol('mission_latitude')  # decimal degrees
 nominal_horizontal_speed = sympy.Symbol('nominal_horizontal_speed')  # m/s
-maximum_hoizontal_speed = sympy.Symbol('maximum_horizontal_speed')  # m/s
+maximum_horizontal_speed = sympy.Symbol('maximum_horizontal_speed')  # m/s
 hull_thickness = sympy.Symbol('hull_thickness')  # m
 hull_length_external = sympy.Symbol('hull_length_external')  # m
 hull_radius_external = sympy.Symbol('hull_radius_external')  # m
 hull_material_yield = sympy.Symbol('hull_material_yield')  # Pa = kg/(m*s^2)
 hull_material_density = sympy.Symbol('hull_material_density')  # kg/m^3
-payload_radius = sympy.Symbol('payload_radius')  # m
 payload_length = sympy.Symbol('payload_length')  # m
 payload_mass = sympy.Symbol('payload_mass')  # kg
 payload_power = sympy.Symbol('payload_power')  # W
@@ -76,7 +78,7 @@ hull_volume_internal = pi * hull_radius_internal**2 * hull_length_internal  # m^
 hull_wetted_area = (2 * pi * hull_radius_external * hull_length_external) + (2 * pi * hull_radius_external**2)  # m^2
 hull_frontal_area = pi * hull_radius_external**2  # m^2
 hull_mass = (hull_volume_external - hull_volume_internal) * hull_material_density  # kg
-payload_volume = pi * payload_radius**2 * payload_length  # m^3
+payload_volume = pi * hull_radius_internal**2 * payload_length  # m^3
 
 
 # OCEAN AND LOCATION-BASED EXPRESSIONS --------------------------------------------------------------------------------
@@ -136,11 +138,16 @@ hoop_stress = hoop_stress_coefficient * pressure_at_depth  # Pa
 # TODO: Parameterize these equations
 
 # Glide slope = tan^-1(C_D / C_L)
-glide_slope = 0.610865
 #atan(glide_slope) = coefficient_of_lift / coefficient_of_drag
-nominal_glide_speed = 0.61
-maximum_glide_speed = 1.22
-dives_per_mission = 263
+glide_slope = 0.610865
+nominal_glide_speed = nominal_horizontal_speed / cos(glide_slope)
+nominal_vertical_speed = nominal_horizontal_speed * tan(glide_slope)
+maximum_glide_speed = maximum_horizontal_speed / cos(glide_slope)
+maximum_vertical_speed = maximum_horizontal_speed * tan(glide_slope)
+dive_duration = PUMP_DURATION_INCREASE_FACTOR * (2 * dive_depth / nominal_vertical_speed)
+dive_horizontal_distance = nominal_horizontal_speed * (2 * dive_depth / nominal_vertical_speed)
+dives_per_mission = horizontal_range / dive_horizontal_distance
+mission_duration = dives_per_mission * dive_duration
 
 
 # LIFT-BASED EXPRESSIONS ----------------------------------------------------------------------------------------------
@@ -203,24 +210,34 @@ battery_mass = num_battery_cells_required * battery_cell_mass  # kg
 
 # CONSTRAINT EQUATIONS ------------------------------------------------------------------------------------------------
 
+# Mission Duration Constraints
+mission_duration_constraint = sympy.Le(mission_duration, time_endurance)
+
 # Neutral Buoyancy Constraint
 uuv_mass = hull_mass + battery_mass + payload_mass + propulsion_mass + hotel_mass + wing_mass  # kg
 uuv_neutral_buoyancy_displaced_volume = hull_volume_external + wing_volume + (propulsion_fluid_volume / 2)  # m^3
 neutral_buoyancy_constraint = sympy.Eq(uuv_mass, uuv_neutral_buoyancy_displaced_volume * water_density)
 
 # Internal Hull Volume Constraint
-internal_hull_volume_constraint = sympy.Eq(hull_volume_internal, \
+internal_hull_volume_constraint = sympy.Ge(hull_volume_internal, \
     battery_volume + hotel_volume + payload_volume + propulsion_fluid_volume)
 
 # Hull Integrity Constraint
-hull_integrity_constraint = sympy.Eq(hull_material_yield * MATERIAL_YIELD_SAFETY_FACTOR, hoop_stress)
+hull_integrity_constraint = sympy.Ge(hull_material_yield * MATERIAL_YIELD_SAFETY_FACTOR, hoop_stress)
 
 # Propulsion Fluid Volume Constraint
-propulsion_fluid_volume_constraint = sympy.Eq(propulsion_fluid_volume, \
+propulsion_fluid_volume_constraint = sympy.Ge(propulsion_fluid_volume, \
     maximum_buoyancy_fluid_required * BUOYANCY_FLUID_SAFETY_FACTOR)  # m^3
 
 # Power Supply Constraint
-power_supply_constraint = sympy.Eq(battery_cell_quantity, num_battery_cells_required)
+power_supply_constraint = sympy.Ge(battery_cell_quantity, num_battery_cells_required)
+
+# Fineness Ratio Constraints
+fineness_ratio_min_constraint = sympy.Ge(hull_length_external, FINENESS_RATIO_MIN * 2 * hull_radius_external)
+fineness_ratio_max_constraint = sympy.Le(hull_length_external, FINENESS_RATIO_MAX * 2 * hull_radius_external)
+
+# Geometry Constraints
+payload_length_constraint = sympy.Le(payload_length, hull_length_internal / 2)
 
 
 # TESTS ---------------------------------------------------------------------------------------------------------------
@@ -298,7 +315,7 @@ if __name__ == '__main__':
     print('\tmaximum_buoyancy_equivalent_mass (kg): {}'.format(maximum_buoyancy_equivalent_mass.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7)]).evalf()))
     print('\tnominal_buoyancy_fluid_required (m^3): {}'.format(nominal_buoyancy_fluid_required.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7)]).evalf()))
     print('\tmaximum_buoyancy_fluid_required (m^3): {}'.format(maximum_buoyancy_fluid_required.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7)]).evalf()))
-    print('\tpropulsion_fluid_volume (m^3): {}'.format(propulsion_fluid_volume_equation.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7)]).evalf().rhs))
+    print('\tpropulsion_fluid_volume (m^3): {}'.format(propulsion_fluid_volume_constraint.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7)]).evalf().rhs))
     print('\tpropulsion_mass (kg): {}'.format(propulsion_mass.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (propulsion_fluid_density, 950), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7)]).evalf()))
 
     # Test energy equations
@@ -315,8 +332,8 @@ if __name__ == '__main__':
 
     # Test solvers
     print('\nSolver Examples:')
-    print('\thull_thickness (m): {}'.format(sympy.solve(hull_thickness_equation.subs([(hull_radius_external, 0.13), (dive_depth, 2000), (hull_material_yield, 2.34422e8)]), hull_thickness)))
-    print('\tpropulsion_fluid_volume (m^3): {}'.format(sympy.solve(propulsion_fluid_volume_equation.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35)]), propulsion_fluid_volume)))
-    print('\tbattery_cell_quantity: {}'.format(sympy.solve(battery_storage_equation.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (time_endurance, 3306173), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (propulsion_engine_efficiency, 0.5), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7), (hotel_power, 5), (payload_power, 20), (battery_cell_energy_capacity, 144000)]), battery_cell_quantity)))
-    print('\tbattery_cell_energy_capacity (J): {}'.format(sympy.solve(battery_storage_equation.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (time_endurance, 3306173), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (propulsion_engine_efficiency, 0.5), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7), (hotel_power, 5), (payload_power, 20), (battery_cell_quantity, 825)]), battery_cell_energy_capacity)))
-    print('\ttime_endurance (s): {}'.format(sympy.solve(battery_storage_equation.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (propulsion_engine_efficiency, 0.5), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7), (hotel_power, 5), (payload_power, 20), (battery_cell_energy_capacity, 144000), (battery_cell_quantity, 400)]), time_endurance)))
+    print('\thull_thickness (m): {}'.format(sympy.solve(hull_integrity_constraint.subs([(hull_radius_external, 0.13), (dive_depth, 2000), (hull_material_yield, 2.34422e8)]), hull_thickness)))
+    print('\tpropulsion_fluid_volume (m^3): {}'.format(sympy.solve(propulsion_fluid_volume_constraint.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35)]), propulsion_fluid_volume)))
+    print('\tbattery_cell_quantity: {}'.format(sympy.solve(power_supply_constraint.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (time_endurance, 3306173), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (propulsion_engine_efficiency, 0.5), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7), (hotel_power, 5), (payload_power, 20), (battery_cell_energy_capacity, 144000)]), battery_cell_quantity)))
+    print('\tbattery_cell_energy_capacity (J): {}'.format(sympy.solve(power_supply_constraint.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (time_endurance, 3306173), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (propulsion_engine_efficiency, 0.5), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7), (hotel_power, 5), (payload_power, 20), (battery_cell_quantity, 825)]), battery_cell_energy_capacity)))
+    print('\ttime_endurance (s): {}'.format(sympy.solve(power_supply_constraint.subs([(hull_radius_external, 0.13), (hull_length_external, 1.82), (mission_latitude, 45), (dive_depth, 2000), (water_temperature, 10), (salinity, 35), (propulsion_engine_efficiency, 0.5), (wing_area, 0.1), (wing_span, 0.8), (wing_span_efficiency, 0.7), (hotel_power, 5), (payload_power, 20), (battery_cell_energy_capacity, 144000), (battery_cell_quantity, 400)]), time_endurance)))
