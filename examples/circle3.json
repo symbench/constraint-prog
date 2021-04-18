@@ -1,0 +1,55 @@
+{
+  "source": "circle3.py",
+  "global_tolerance": 1.0,
+  "equations": {
+    "equ1": {
+      "tolerance": 1e-3
+    },
+    "equ2": {
+      "tolerance": 1e-3
+    },
+    "equ3": {
+      "tolerance": 1e-3
+    },
+    "equ4": {
+      "tolerance": 1e-3
+    },
+    "equ5": {
+      "tolerance": 1e-3
+    }
+  },
+  "variables": {
+    "x1": {
+      "min": -2.0,
+      "max": 2.0,
+      "resolution": 0.00001
+    },
+    "y1": {
+      "min": -2.0,
+      "max": 2.0,
+      "resolution": 0.00001
+    },
+    "x2": {
+      "min": -2.0,
+      "max": 2.0,
+      "resolution": 0.00001
+    },
+    "y2": {
+      "min": -2.0,
+      "max": 2.0,
+      "resolution": 0.00001
+    },
+    "r": {
+      "min": 1.0,
+      "max": 4.0,
+      "resolution": 0.00001
+    }
+  },
+  "expressions": [
+    "norm1",
+    "norm2",
+    "dist1",
+    "dist2",
+    "dist3"
+  ]
+}

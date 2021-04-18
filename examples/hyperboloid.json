@@ -1,0 +1,31 @@
+
+{
+  "source": "hyperboloid.py",
+  "global_tolerance": 1.0,
+  "equations": {
+    "equ1": {
+      "tolerance": 1e-3
+    },
+    "equ2": {
+      "tolerance": 1e-3
+    }
+  },
+  "variables": {
+    "x": {
+      "min": 0.0,
+      "max": 4.0,
+      "resolution": 1e-3
+    },
+    "y": {
+      "min": 0.0,
+      "max": 4.0,
+      "resolution": 1e-3
+    },
+    "z": {
+      "min": 0.0,
+      "max": 4.0,
+      "resolution": 1e-3
+    }
+  },
+  "expressions": []
+}
