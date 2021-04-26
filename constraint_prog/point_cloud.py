@@ -19,8 +19,8 @@ from typing import List
 import csv
 import os
 import numpy as np
-from numpy.lib.recfunctions import unstructured_to_structured
 import torch
+from collections import Counter
 
 
 class PointCloud:
@@ -57,6 +57,9 @@ class PointCloud:
 
     @staticmethod
     def load(filename: str) -> 'PointCloud':
+        """
+        Loads the data from the given csv or npz file.
+        """
         ext = os.path.splitext(filename)[1]
         if ext == ".csv":
             data = np.genfromtxt(filename, delimiter=',', dtype=np.float32, names=True)
@@ -70,3 +73,53 @@ class PointCloud:
             return PointCloud(sample_vars, sample_data)
         else:
             raise ValueError("invalid filename extension")
+
+    def to_device(self, device="cpu"):
+        """
+        Moves the sample data to the given device.
+        """
+        self.sample_data = self.sample_data.to(device)
+
+    def prune_close_points(self, resolutions: List[float], keep=1):
+        """
+        Divides all variables with the given resolution and keeps at most keep
+        many elements from each small rectangle. If a resolution value is zero,
+        then those variables do not participate in the decisions, so basically
+        we project down only to those variables where the resolution is
+        positive. The resolution list must be of shape [vars_size].
+        """
+        assert keep >= 1 and len(resolutions) == self.sample_data.shape[-1]
+
+        resolutions = torch.tensor(list(resolutions))
+        multiplier = resolutions.clamp(min=0.0)
+        indices = multiplier > 0.0
+        multiplier[indices] = 1.0 / multiplier[indices]
+        multiplier = multiplier.to(self.sample_data.device)
+
+        rounded = (self.sample_data * multiplier).round().type(torch.int64)
+        multiplier = None
+
+        # hash based filtering is not unique, but good enough
+        randcoef = torch.randint(-10000000, 10000000, (rounded.shape[-1], ),
+                                 device=rounded.device)
+        hashnums = (rounded * randcoef).sum(dim=1).cpu()
+        rounded = None
+
+        # this is slow, but good enough
+        sample_data = self.sample_data.cpu().reshape((-1, len(resolutions)))
+        selected = torch.zeros(sample_data.shape[0]).bool()
+        counter = Counter()
+        for idx in range(sample_data.shape[0]):
+            value = int(hashnums[idx])
+            if counter[value] < keep:
+                counter[value] += 1
+                selected[idx] = True
+
+        self.sample_data = sample_data[selected].to(self.sample_data.device)
+
+
+if __name__ == '__main__':
+    points = PointCloud.load('elliptic_curve.npz')
+    points.print_info()
+    points.prune_close_points([0.1, 0.0, 0.1], keep=10)
+    points.print_info()
