@@ -154,8 +154,8 @@ class PointCloud:
         """
         Returns those points that lie in the specified bounding box in a new
         point cloud. The shape of the minimums and maximums lists must be of
-        [vars_size]. If no bound is necessary, then use -inf or inf for that
-        value.
+        shape [num_vars]. If no bound is necessary, then use -inf or inf for 
+        that value.
         """
         assert len(minimums) == self.num_vars and len(maximums) == self.num_vars
 
@@ -164,6 +164,37 @@ class PointCloud:
         sel3 = torch.logical_and(sel1, sel2).all(dim=1)
 
         return PointCloud(self.sample_vars, self.sample_data[sel3])
+
+    def prune_pareto_dominated(self, directions: List[float]) -> 'PointCloud':
+        """
+        Removes all points that are dominated by a better solution on the Pareto
+        front. The directions list specifies the direction of each variables, and
+        must be of shape [num_vars]. If the direction is negative, then we prefer
+        a smaller value all other values being equal (e.g. price). If the direction
+        is positive, then we prefer a larger value (e.g. speed). If the direction
+        is zero, then that variable does not participate in the Pareto front 
+        calculation, but their values are kept for selected points.
+        """
+        pass
+
+    def get_pareto_distance(self, directions: List[float], point: List[float]) -> float:
+        """
+        Calculates the distance of the given point to the pareto front. The
+        shape of the point list must be [num_vars]. The returned distance is
+        positive in the dominated (feasible) region, and negative in the
+        nondominated region and zero precisely on the Pareto front. The
+        meaning of the directions is exactly as in the prune_pareto_dominated 
+        method.
+        """
+        pass
+
+    def projection(self, variables: List[int]) -> 'PointCloud':
+        """
+        Returns the projection of this point cloud to the specified set of
+        variables. The elements of the variables list must be between 0
+        and num_vars - 1.
+        """
+        pass
 
 
 if __name__ == '__main__':
