@@ -26,12 +26,25 @@ from collections import Counter
 class PointCloud:
     def __init__(self, sample_vars: List[str], sample_data: torch.Tensor):
         """
-        Creates a point table with vars_size many named coordinates.
-        The shape of the sample_data must be [*,vars_size].
+        Creates a point cloud with num_vars many named coordinates.
+        The shape of the sample_data must be [num_points, num_vars].
         """
-        assert sample_data.shape[-1] == len(sample_vars)
+        assert sample_data.ndim == 2
+        assert sample_data.shape[1] == len(sample_vars)
         self.sample_vars = sample_vars
         self.sample_data = sample_data
+
+    @property
+    def num_vars(self):
+        return len(self.sample_vars)
+
+    @property
+    def num_points(self):
+        return self.sample_data.shape[0]
+
+    @property
+    def device(self):
+        return self.sample_data.device
 
     def print_info(self):
         print("shape: {}".format(list(self.sample_data.shape)))
@@ -74,39 +87,58 @@ class PointCloud:
         else:
             raise ValueError("invalid filename extension")
 
+    @staticmethod
+    def generate(sample_vars: List[str],
+                 minimums: List[float], maximums: List[float],
+                 num_points: int, device='cpu') -> 'PointCloud':
+        """
+        Creates a new point cloud with the given number of points and
+        bounding box with uniform distribution.
+        """
+        assert len(sample_vars) == len(minimums)
+        assert len(sample_vars) == len(maximums)
+
+        minimums = torch.tensor(minimums, device=device)
+        maximums = torch.tensor(maximums, device=device)
+        sample_data = torch.rand(size=(num_points, len(sample_vars)),
+                                 device=device)
+        sample_data = sample_data * (maximums - minimums) + minimums
+        return PointCloud(sample_vars, sample_data)
+
     def to_device(self, device="cpu"):
         """
         Moves the sample data to the given device.
         """
         self.sample_data = self.sample_data.to(device)
 
-    def prune_close_points(self, resolutions: List[float], keep=1):
+    def prune_close_points(self, resolutions: List[float], keep=1) -> 'PointCloud':
         """
         Divides all variables with the given resolution and keeps at most keep
-        many elements from each small rectangle. If a resolution value is zero,
-        then those variables do not participate in the decisions, so basically
-        we project down only to those variables where the resolution is
-        positive. The resolution list must be of shape [vars_size].
+        many elements from each small rectangle in a new point cloud. If a
+        resolution value is zero, then those variables do not participate in
+        the decisions, so basically we project down only to those variables
+        where the resolution is positive. The resolution list must be of shape
+        [num_vars].
         """
-        assert keep >= 1 and len(resolutions) == self.sample_data.shape[-1]
+        assert keep >= 1 and len(resolutions) == self.num_vars
 
         resolutions = torch.tensor(list(resolutions))
         multiplier = resolutions.clamp(min=0.0)
         indices = multiplier > 0.0
         multiplier[indices] = 1.0 / multiplier[indices]
-        multiplier = multiplier.to(self.sample_data.device)
+        multiplier = multiplier.to(self.device)
 
         rounded = (self.sample_data * multiplier).round().type(torch.int64)
         multiplier = None
 
         # hash based filtering is not unique, but good enough
-        randcoef = torch.randint(-10000000, 10000000, (rounded.shape[-1], ),
-                                 device=rounded.device)
+        randcoef = torch.randint(-10000000, 10000000, (self.num_vars, ),
+                                 device=self.device)
         hashnums = (rounded * randcoef).sum(dim=1).cpu()
         rounded = None
 
         # this is slow, but good enough
-        sample_data = self.sample_data.cpu().reshape((-1, len(resolutions)))
+        sample_data = self.sample_data.cpu()
         selected = torch.zeros(sample_data.shape[0]).bool()
         counter = Counter()
         for idx in range(sample_data.shape[0]):
@@ -115,11 +147,31 @@ class PointCloud:
                 counter[value] += 1
                 selected[idx] = True
 
-        self.sample_data = sample_data[selected].to(self.sample_data.device)
+        sample_data = sample_data[selected].to(self.device)
+        return PointCloud(self.sample_vars, sample_data)
+
+    def prune_bounding_box(self, minimums: List[float], maximums: List[float]) -> 'PointCloud':
+        """
+        Returns those points that lie in the specified bounding box in a new
+        point cloud. The shape of the minimums and maximums lists must be of
+        [vars_size]. If no bound is necessary, then use -inf or inf for that
+        value.
+        """
+        assert len(minimums) == self.num_vars and len(maximums) == self.num_vars
+
+        sel1 = self.sample_data >= torch.tensor(minimums, device=self.device)
+        sel2 = self.sample_data <= torch.tensor(maximums, device=self.device)
+        sel3 = torch.logical_and(sel1, sel2).all(dim=1)
+
+        return PointCloud(self.sample_vars, self.sample_data[sel3])
 
 
 if __name__ == '__main__':
     points = PointCloud.load('elliptic_curve.npz')
     points.print_info()
-    points.prune_close_points([0.1, 0.0, 0.1], keep=10)
+    points = points.prune_close_points([0.1, 0.0, 0.1], keep=10)
+    points.print_info()
+    points = points.prune_bounding_box([-1, -1, -1], [1, 2, 3])
+    points.print_info()
+    points = PointCloud.generate(['x', 'y', 'z'], [0, 0, 0], [1, 1, 1], 1000)
     points.print_info()
