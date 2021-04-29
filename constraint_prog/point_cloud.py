@@ -14,13 +14,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List
-
+from collections import Counter
 import csv
 import os
+from typing import List
+
+import matplotlib.pyplot as plt
 import numpy as np
+import sympy
 import torch
-from collections import Counter
+
+from constraint_prog.sympy_func import SympyFunc
 
 
 class PointCloud:
@@ -165,7 +169,7 @@ class PointCloud:
 
         return PointCloud(self.sample_vars, self.sample_data[sel3])
 
-    def prune_pareto_dominated(self, directions: List[float]) -> 'PointCloud':
+    def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
         """
         Removes all points that are dominated by a better solution on the Pareto
         front. The directions list specifies the direction of each variables, and
@@ -175,7 +179,29 @@ class PointCloud:
         is zero, then that variable does not participate in the Pareto front 
         calculation, but their values are kept for selected points.
         """
-        pass
+        assert len(directions) == self.num_vars
+
+        # gather data for minimization in all coordinates
+        sample_data = []
+        for idx in range(self.num_vars):
+            if directions[idx] == 0.0:
+                continue
+            else:
+                data = self.sample_data[:, idx]
+                sample_data.append(data if directions[idx] < 0.0 else -data)
+        assert sample_data
+        sample_data = torch.stack(sample_data, dim=1)
+
+        # TODO: find a faster algorithm than this quadratic
+        selected = torch.ones(self.num_points, dtype=bool)
+        for idx in range(self.num_points):
+            test1 = (sample_data[:idx, :] <= sample_data[idx]).all(dim=1)
+            test2 = (sample_data[:idx, :] != sample_data[idx]).any(dim=1)
+            test3 = torch.logical_and(test1, test2).any().item()
+            test4 = (sample_data[idx + 1:, :] <= sample_data[idx]).all(dim=1).any().item()
+            selected[idx] = not (test3 or test4)
+
+        return PointCloud(self.sample_vars, self.sample_data[selected, :])
 
     def get_pareto_distance(self, directions: List[float], point: List[float]) -> float:
         """
@@ -188,21 +214,65 @@ class PointCloud:
         """
         pass
 
+    def evaluate(self, variables: List[str], expressions: List[sympy.Expr]):
+        """
+        Evaluates the given list of expressions on the current points and
+        returns a new point cloud with these values. The length of the 
+        variables list must match that of the expressions. The free symbols
+        of the expressions must be among the variables of this point cloud.
+        """
+        assert len(variables) == len(expressions)
+        func = SympyFunc(expressions, device=self.device)
+        assert all(var in self.sample_vars for var in func.input_names)
+
+        input_data = []
+        for var in func.input_names:
+            idx = self.sample_vars.index(var)
+            input_data.append(self.sample_data[:, idx])
+        input_data = torch.stack(input_data, dim=1)
+
+        return PointCloud(variables, func(input_data))
+
     def projection(self, variables: List[int]) -> 'PointCloud':
         """
         Returns the projection of this point cloud to the specified set of
         variables. The elements of the variables list must be between 0
         and num_vars - 1.
         """
-        pass
+        sample_vars = [self.sample_vars[idx] for idx in variables]
+        sample_data = [self.sample_data[:, idx] for idx in variables]
+        sample_data = torch.stack(sample_data, dim=1)
+        return PointCloud(sample_vars, sample_data)
+
+    def plot2d(self, idx1: int, idx2: int, point_size: float = 5.0):
+        """
+        Plots the 2d projection of the point cloud to the given coordinates.
+        """
+        assert 0 <= idx1 < self.num_vars and 0 <= idx2 < self.num_vars
+        fig, ax1 = plt.subplots()
+        ax1.scatter(
+            self.sample_data[:, idx1].numpy(),
+            self.sample_data[:, idx2].numpy(),
+            s=point_size)
+        ax1.set_xlabel(self.sample_vars[idx1])
+        ax1.set_ylabel(self.sample_vars[idx2])
+        plt.show()
 
 
 if __name__ == '__main__':
-    points = PointCloud.load('elliptic_curve.npz')
+    if False:
+        points = PointCloud.load('elliptic_curve.npz')
+        points.print_info()
+        points.plot2d(0, 1)
+        points = points.prune_close_points([0.1, 0.0, 0.1], keep=10)
+        points.print_info()
+        points = points.prune_bounding_box([-1, -1, -1], [1, 2, 3])
+        points.print_info()
+    # points = PointCloud.load('elliptic_curve.npz')
+    points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
+    x = sympy.Symbol("x")
+    y = sympy.Symbol("y")
+    points = points.evaluate(["x", "y", "z"], [x, y, 1.0 - x + 0.5 * y])
     points.print_info()
-    points = points.prune_close_points([0.1, 0.0, 0.1], keep=10)
-    points.print_info()
-    points = points.prune_bounding_box([-1, -1, -1], [1, 2, 3])
-    points.print_info()
-    points = PointCloud.generate(['x', 'y', 'z'], [0, 0, 0], [1, 1, 1], 1000)
-    points.print_info()
+    points = points.prune_pareto_front([-1.0, 0.0, -1.0])
+    points.plot2d(0, 2)

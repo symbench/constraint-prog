@@ -21,26 +21,6 @@ import sympy
 from sympy.logic.boolalg import BooleanTrue, BooleanFalse
 
 
-class Scaler(object):
-    """
-    A callable wrapper object for SympyFunc, allowing to scale
-    equations.
-    """
-
-    def __init__(self, func: Callable, scaling: torch.tensor):
-        """
-        The scaling must be a tensor of shape [output_size].
-        """
-        self.func = func
-        assert scaling.ndim == 1
-        self.scaling = scaling
-
-    def __call__(self, input_data: torch.tensor,
-                 equs_as_float: bool = True) -> torch.tensor:
-        output_data = self.func(input_data, equs_as_float)
-        return output_data * self.scaling
-
-
 class SympyFunc(object):
     """
     A callable object created from a list of sympy symbolic expressions.
@@ -121,8 +101,7 @@ class SympyFunc(object):
             value1 = self._eval(expr.args[1])
             return torch.sub(value0, value1).clamp_max(0.0)
         else:
-            raise ValueError(
-                "Unknown symbolic expression " + str(type(expr)))
+            return self._eval(expr)
 
     def _eval(self, expr: sympy.Expr) -> torch.tensor:
         if (expr.func == sympy.Integer or expr.func == sympy.Float
@@ -242,3 +221,23 @@ class SympyFunc(object):
     @property
     def output_size(self):
         return len(self.expressions)
+
+
+class Scaler(object):
+    """
+    A callable wrapper object for SympyFunc, allowing to scale
+    equations.
+    """
+
+    def __init__(self, func: Callable, scaling: torch.tensor):
+        """
+        The scaling must be a tensor of shape [output_size].
+        """
+        self.func = func
+        assert scaling.ndim == 1
+        self.scaling = scaling
+
+    def __call__(self, input_data: torch.tensor,
+                 equs_as_float: bool = True) -> torch.tensor:
+        output_data = self.func(input_data, equs_as_float)
+        return output_data * self.scaling
