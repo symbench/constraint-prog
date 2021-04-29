@@ -224,15 +224,17 @@ class PointCloud:
         """
         pass
 
-    def evaluate(self, variables: List[str], func: SympyFunc) -> 'PointCloud':
+    def evaluate(self, variables: List[str],
+                 expressions: List[sympy.Expr]) -> 'PointCloud':
         """
-        Evaluates the given list of expressions within the sympy func on the
-        current points and returns a new point cloud with these values. The
-        length of the variables list must match that of the expressions. The
-        free symbols of the expressions must be among the variables of this
+        Evaluates the given list of expressions on the current points
+        and returns a new point cloud with these values. The length of
+        the variables list must match that of the expressions. The free
+        symbols of the expressions must be among the variables of this
         point cloud.
         """
-        assert len(variables) == len(func.expressions)
+        assert len(variables) == len(expressions)
+        func = SympyFunc(expressions, device=self.device)
         assert all(var in self.sample_vars for var in func.input_names)
 
         input_data = []
@@ -241,7 +243,7 @@ class PointCloud:
             input_data.append(self.sample_data[:, idx])
         input_data = torch.stack(input_data, dim=1)
 
-        return PointCloud(variables, func(input_data.to(func.device)))
+        return PointCloud(variables, func(input_data))
 
     def projection(self, variables: List[int]) -> 'PointCloud':
         """
@@ -282,7 +284,7 @@ if __name__ == '__main__':
     points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
     x = sympy.Symbol("x")
     y = sympy.Symbol("y")
-    points = points.evaluate(["x", "y", "z"], SympyFunc([x, y, x + y]))
+    points = points.evaluate(["x", "y", "z"], [x, y, x + y])
     points.print_info()
     # points = points.prune_pareto_front([-1.0, -1.0, -1.0])
     points = points.prune_by_tolerances([1.0, 0.3, 0.5])
