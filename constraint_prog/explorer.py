@@ -117,7 +117,7 @@ class Explorer:
         print("After checking tolerances we have {} designs".format(
             output_data.shape[0]))
 
-        output_data = self.prune_close_points2(output_data)
+        output_data = self.prune_close_points(output_data)
         print("After pruning close points we have {} designs".format(
             output_data.shape[0]))
 
@@ -183,7 +183,7 @@ class Explorer:
         good_point_idx = (equation_output.abs() < self.tolerances).all(dim=-1)
         return samples[good_point_idx]
 
-    def prune_close_points2(self, samples: torch.tensor) -> torch.tensor:
+    def prune_close_points(self, samples: torch.tensor) -> torch.tensor:
         assert samples.ndim == 2 and samples.shape[1] == len(self.constraints_res)
         rounded = samples / self.constraints_res.reshape((1, samples.shape[1]))
         rounded = rounded.round().type(torch.int64)
