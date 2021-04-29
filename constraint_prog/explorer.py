@@ -27,6 +27,7 @@ from constraint_prog.sympy_func import SympyFunc, Scaler
 from constraint_prog.gradient_descent import gradient_descent
 from constraint_prog.newton_raphson import newton_raphson
 from constraint_prog.problem_loader import ProblemLoader
+from constraint_prog.point_cloud import PointCloud
 
 
 class Explorer:
@@ -76,7 +77,7 @@ class Explorer:
             [[constraints[var]["max"] for var in self.func.input_names]],
             device=self.device)
         self.constraints_res = torch.tensor(
-            [constraints[var]["resolution"]for var in self.func.input_names],
+            [constraints[var]["resolution"] for var in self.func.input_names],
             device=self.device)
 
         self.tolerances = torch.tensor(
@@ -92,10 +93,18 @@ class Explorer:
         print("Variable names:", ', '.join(self.func.input_names))
 
     def run(self) -> None:
-        input_data = self.generate_input().to(self.device)
+        minimums = list(self.constraints_min.detach().cpu().numpy().flatten())
+        maximums = list(self.constraints_max.detach().cpu().numpy().flatten())
+        resolutions = list(self.constraints_res.detach().cpu().numpy())
 
+        input_point_cloud = PointCloud.generate(sample_vars=self.func.input_names,
+                                                minimums=minimums,
+                                                maximums=maximums,
+                                                num_points=self.max_points)
         print("Running {} method on {} many design points".format(
-            self.method, input_data.shape[0]))
+            self.method, input_point_cloud.num_points))
+
+        input_data = input_point_cloud.sample_data.to(self.device)
         output_data = None
         if self.method == "newton":
             bounding_box = torch.cat(
@@ -113,18 +122,24 @@ class Explorer:
                                            lrate=self.gradient_lr,
                                            device=self.device)
 
-        output_data = self.check_tolerance(output_data)
+        output_point_cloud = PointCloud(sample_vars=self.func.input_names,
+                                        sample_data=output_data)
+
+        output_point_cloud = output_point_cloud.check_tolerance(func=self.func,
+                                                                tolerances=self.tolerances)
         print("After checking tolerances we have {} designs".format(
-            output_data.shape[0]))
+            output_point_cloud.num_points))
 
-        output_data = self.prune_close_points(output_data)
+        output_point_cloud = output_point_cloud.prune_close_points(resolutions=resolutions)
         print("After pruning close points we have {} designs".format(
-            output_data.shape[0]))
+            output_point_cloud.num_points))
 
-        output_data = self.prune_bounding_box(output_data)
+        output_point_cloud = output_point_cloud.prune_bounding_box(minimums=minimums,
+                                                                   maximums=maximums)
         print("After bounding box pruning we have {} designs".format(
-            output_data.shape[0]))
+            output_point_cloud.num_points))
 
+        output_data = output_point_cloud.sample_data.to(self.device)
         self.save_data(output_data)
 
     def save_data(self, samples: torch.tensor) -> None:
@@ -164,53 +179,6 @@ class Explorer:
             np.savez_compressed(file_name,
                                 sample_vars=sample_vars,
                                 sample_data=sample_data)
-
-    def generate_input(self) -> torch.tensor:
-        """Generates input data with uniform distribution."""
-        sample = torch.rand(
-            size=(self.max_points, self.func.input_size),
-            device=self.device)
-        sample *= (self.constraints_max - self.constraints_min)
-        sample += self.constraints_min
-        return sample
-
-    def check_tolerance(self, samples: torch.tensor) -> torch.tensor:
-        """
-        Evaluates the given list of designs and returns a new list for
-        which the absolute errors is less than the tolerance.
-        """
-        equation_output = self.func(samples)
-        good_point_idx = (equation_output.abs() < self.tolerances).all(dim=-1)
-        return samples[good_point_idx]
-
-    def prune_close_points(self, samples: torch.tensor) -> torch.tensor:
-        assert samples.ndim == 2 and samples.shape[1] == len(self.constraints_res)
-        rounded = samples / self.constraints_res.reshape((1, samples.shape[1]))
-        rounded = rounded.round().type(torch.int64)
-
-        # hash based filtering is not unique, but good enough
-        randcoef = torch.randint(
-            -10000000, 10000000, (1, samples.shape[1]),
-            device=self.device)
-        hashnums = (rounded * randcoef).sum(dim=1).cpu()
-
-        # this is slow, but good enough
-        selected = torch.zeros(samples.shape[0]).bool()
-        hashset = set()
-        for idx in range(samples.shape[0]):
-            value = int(hashnums[idx])
-            if value not in hashset:
-                hashset.add(value)
-                selected[idx] = True
-
-        return samples[selected.to(samples.device)]
-
-    def prune_bounding_box(self, samples: torch.tensor) -> torch.tensor:
-        assert samples.ndim == 2
-        selected = torch.logical_and(samples >= self.constraints_min,
-                                     samples <= self.constraints_max)
-        selected = selected.all(dim=1)
-        return samples[selected]
 
 
 def main(args=None):

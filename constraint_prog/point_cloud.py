@@ -105,6 +105,12 @@ class PointCloud:
         sample_data = sample_data * (maximums - minimums) + minimums
         return PointCloud(sample_vars, sample_data)
 
+    def check_tolerance(self, func, tolerances) -> 'PointCloud':
+        equation_output = func(self.sample_data)
+        good_point_idx = (equation_output.abs() < tolerances).all(dim=-1)
+        return PointCloud(sample_vars=self.sample_vars,
+                          sample_data=self.sample_data[good_point_idx])
+
     def to_device(self, device="cpu"):
         """
         Moves the sample data to the given device.
