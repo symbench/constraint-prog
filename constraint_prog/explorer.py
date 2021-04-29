@@ -96,6 +96,7 @@ class Explorer:
         minimums = list(self.constraints_min.detach().cpu().numpy().flatten())
         maximums = list(self.constraints_max.detach().cpu().numpy().flatten())
         resolutions = list(self.constraints_res.detach().cpu().numpy())
+        tolerances = list(self.tolerances.detach().cpu().numpy())
 
         input_point_cloud = PointCloud.generate(sample_vars=self.func.input_names,
                                                 minimums=minimums,
@@ -125,9 +126,12 @@ class Explorer:
         output_point_cloud = PointCloud(sample_vars=self.func.input_names,
                                         sample_data=output_data)
 
-        output_point_cloud = output_point_cloud.prune_tolerance(
-            func=self.func,
-            tolerances=self.tolerances)
+        eval_output = output_point_cloud.evaluate(
+            variables=list(self.equations.keys()),
+            expressions=[equ["expr"] for equ in self.equations.values()])
+        output_point_cloud = output_point_cloud.prune_by_tolerances(
+            eval_output=eval_output,
+            tolerances=tolerances)
         print("After checking tolerances we have {} designs".format(
             output_point_cloud.num_points))
 
