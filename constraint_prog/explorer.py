@@ -125,17 +125,20 @@ class Explorer:
         output_point_cloud = PointCloud(sample_vars=self.func.input_names,
                                         sample_data=output_data)
 
-        output_point_cloud = output_point_cloud.check_tolerance(func=self.func,
-                                                                tolerances=self.tolerances)
+        output_point_cloud = output_point_cloud.prune_tolerance(
+            func=self.func,
+            tolerances=self.tolerances)
         print("After checking tolerances we have {} designs".format(
             output_point_cloud.num_points))
 
-        output_point_cloud = output_point_cloud.prune_close_points(resolutions=resolutions)
+        output_point_cloud = output_point_cloud.prune_close_points(
+            resolutions=resolutions)
         print("After pruning close points we have {} designs".format(
             output_point_cloud.num_points))
 
-        output_point_cloud = output_point_cloud.prune_bounding_box(minimums=minimums,
-                                                                   maximums=maximums)
+        output_point_cloud = output_point_cloud.prune_bounding_box(
+            minimums=minimums,
+            maximums=maximums)
         print("After bounding box pruning we have {} designs".format(
             output_point_cloud.num_points))
 

@@ -105,7 +105,7 @@ class PointCloud:
         sample_data = sample_data * (maximums - minimums) + minimums
         return PointCloud(sample_vars, sample_data)
 
-    def check_tolerance(self, func, tolerances) -> 'PointCloud':
+    def prune_tolerance(self, func, tolerances) -> 'PointCloud':
         equation_output = func(self.sample_data)
         good_point_idx = (equation_output.abs() < tolerances).all(dim=-1)
         return PointCloud(sample_vars=self.sample_vars,
