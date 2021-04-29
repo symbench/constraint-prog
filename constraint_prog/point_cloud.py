@@ -169,6 +169,16 @@ class PointCloud:
 
         return PointCloud(self.sample_vars, self.sample_data[sel3])
 
+    def prune_by_tolerances(self, tolerances: List[float]) -> 'PointCloud':
+        """
+        Returns those points where all coodrinates are smaller in absolute 
+        value than the given tolerance. The length of tolerances must be
+        num_vars.
+        """
+        assert len(tolerances) == self.num_vars
+        sel = self.sample_data.abs() <= torch.tensor(tolerances, device=self.device)
+        return PointCloud(self.sample_vars, self.sample_data[sel.all(dim=1)])
+
     def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
         """
         Removes all points that are dominated by a better solution on the Pareto
@@ -214,15 +224,15 @@ class PointCloud:
         """
         pass
 
-    def evaluate(self, variables: List[str], expressions: List[sympy.Expr]):
+    def evaluate(self, variables: List[str], func: SympyFunc) -> 'PointCloud':
         """
-        Evaluates the given list of expressions on the current points and
-        returns a new point cloud with these values. The length of the 
-        variables list must match that of the expressions. The free symbols
-        of the expressions must be among the variables of this point cloud.
+        Evaluates the given list of expressions within the sympy func on the
+        current points and returns a new point cloud with these values. The
+        length of the variables list must match that of the expressions. The
+        free symbols of the expressions must be among the variables of this
+        point cloud.
         """
-        assert len(variables) == len(expressions)
-        func = SympyFunc(expressions, device=self.device)
+        assert len(variables) == len(func.expressions)
         assert all(var in self.sample_vars for var in func.input_names)
 
         input_data = []
@@ -231,7 +241,7 @@ class PointCloud:
             input_data.append(self.sample_data[:, idx])
         input_data = torch.stack(input_data, dim=1)
 
-        return PointCloud(variables, func(input_data))
+        return PointCloud(variables, func(input_data.to(func.device)))
 
     def projection(self, variables: List[int]) -> 'PointCloud':
         """
@@ -272,7 +282,9 @@ if __name__ == '__main__':
     points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
     x = sympy.Symbol("x")
     y = sympy.Symbol("y")
-    points = points.evaluate(["x", "y", "z"], [x, y, 1.0 - x + 0.5 * y])
+    points = points.evaluate(["x", "y", "z"], SympyFunc([x, y, x + y]))
     points.print_info()
-    points = points.prune_pareto_front([-1.0, 0.0, -1.0])
-    points.plot2d(0, 2)
+    # points = points.prune_pareto_front([-1.0, -1.0, -1.0])
+    points = points.prune_by_tolerances([1.0, 0.3, 0.5])
+    points.print_info()
+    points.plot2d(0, 1)
