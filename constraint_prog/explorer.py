@@ -70,15 +70,9 @@ class Explorer:
             del constraints[unused_key]
 
         assert sorted(constraints.keys()) == self.func.input_names
-        self.constraints_min = torch.tensor(
-            [[constraints[var]["min"] for var in self.func.input_names]],
-            device=self.device)
-        self.constraints_max = torch.tensor(
-            [[constraints[var]["max"] for var in self.func.input_names]],
-            device=self.device)
-        self.constraints_res = torch.tensor(
-            [constraints[var]["resolution"] for var in self.func.input_names],
-            device=self.device)
+        self.constraints_min = [constraints[var]["min"] for var in self.func.input_names]
+        self.constraints_max = [constraints[var]["max"] for var in self.func.input_names]
+        self.constraints_res = [constraints[var]["resolution"] for var in self.func.input_names]
 
         self.tolerances = torch.tensor(
             [equ["tolerance"] for equ in self.equations.values()],
@@ -93,14 +87,9 @@ class Explorer:
         print("Variable names:", ', '.join(self.func.input_names))
 
     def run(self) -> None:
-        minimums = list(self.constraints_min.detach().cpu().numpy().flatten())
-        maximums = list(self.constraints_max.detach().cpu().numpy().flatten())
-        resolutions = list(self.constraints_res.detach().cpu().numpy())
-        tolerances = list(self.tolerances.detach().cpu().numpy())
-
         input_point_cloud = PointCloud.generate(sample_vars=self.func.input_names,
-                                                minimums=minimums,
-                                                maximums=maximums,
+                                                minimums=self.constraints_min,
+                                                maximums=self.constraints_max,
                                                 num_points=self.max_points)
         print("Running {} method on {} many design points".format(
             self.method, input_point_cloud.num_points))
@@ -109,7 +98,8 @@ class Explorer:
         output_data = None
         if self.method == "newton":
             bounding_box = torch.cat(
-                (self.constraints_min, self.constraints_max))
+                (torch.tensor([self.constraints_min], device=self.device),
+                 torch.tensor([self.constraints_max], device=self.device)))
             output_data = newton_raphson(func=self.scaled_func,
                                          input_data=input_data,
                                          num_iter=self.newton_iter,
@@ -129,6 +119,7 @@ class Explorer:
         eval_output = output_point_cloud.evaluate(
             variables=list(self.equations.keys()),
             expressions=[equ["expr"] for equ in self.equations.values()])
+        tolerances = list(self.tolerances.detach().cpu().numpy())
         output_point_cloud = output_point_cloud.prune_by_tolerances(
             eval_output=eval_output,
             tolerances=tolerances)
@@ -136,13 +127,13 @@ class Explorer:
             output_point_cloud.num_points))
 
         output_point_cloud = output_point_cloud.prune_close_points(
-            resolutions=resolutions)
+            resolutions=self.constraints_res)
         print("After pruning close points we have {} designs".format(
             output_point_cloud.num_points))
 
         output_point_cloud = output_point_cloud.prune_bounding_box(
-            minimums=minimums,
-            maximums=maximums)
+            minimums=self.constraints_min,
+            maximums=self.constraints_max)
         print("After bounding box pruning we have {} designs".format(
             output_point_cloud.num_points))
 
