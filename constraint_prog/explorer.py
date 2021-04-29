@@ -16,7 +16,6 @@
 
 import argparse
 from copy import deepcopy
-import csv
 import json
 import os
 
@@ -87,14 +86,61 @@ class Explorer:
         print("Variable names:", ', '.join(self.func.input_names))
 
     def run(self) -> None:
-        input_point_cloud = PointCloud.generate(sample_vars=self.func.input_names,
-                                                minimums=self.constraints_min,
-                                                maximums=self.constraints_max,
-                                                num_points=self.max_points)
+        """
+        Runs exploration w.r.t. the given constraints
+        """
+        # Generate sample points
+        sample_data = PointCloud.generate(sample_vars=self.func.input_names,
+                                          minimums=self.constraints_min,
+                                          maximums=self.constraints_max,
+                                          num_points=self.max_points)
         print("Running {} method on {} many design points".format(
-            self.method, input_point_cloud.num_points))
+            self.method, sample_data.num_points))
 
-        input_data = input_point_cloud.sample_data.to(self.device)
+        # Run solver
+        output_data = self.run_solver(
+            samples=sample_data)
+
+        # Prune by tolerances
+        eval_output = output_data.evaluate(
+            variables=list(self.equations.keys()),
+            expressions=[equ["expr"] for equ in self.equations.values()])
+        tolerances = list(self.tolerances.detach().cpu().numpy())
+        output_data = output_data.prune_by_tolerances(
+            eval_output=eval_output,
+            tolerances=tolerances)
+        print("After checking tolerances we have {} designs".format(
+            output_data.num_points))
+
+        # Prune close points
+        output_data = output_data.prune_close_points(
+            resolutions=self.constraints_res)
+        print("After pruning close points we have {} designs".format(
+            output_data.num_points))
+
+        # Prune bounding box
+        output_data = output_data.prune_bounding_box(
+            minimums=self.constraints_min,
+            maximums=self.constraints_max)
+        print("After bounding box pruning we have {} designs".format(
+            output_data.num_points))
+
+        # Save results
+        filename = os.path.splitext(os.path.basename(self.problem_json))[0] + \
+            (".csv" if self.to_csv else ".npz")
+        file_name = os.path.join(os.path.abspath(self.output_dir), filename)
+        print("Saving generated design points to:", file_name)
+
+        output_data = self.extend_output_data(output_data=output_data)
+        output_data.save(filename=file_name)
+
+    def run_solver(self, samples: PointCloud) -> PointCloud:
+        """
+        Runs selected solver method
+        :param PointCloud samples: generated sample for the exploration
+        :return PointCloud: output of the iterative solver
+        """
+        input_data = samples.sample_data.to(self.device)
         output_data = None
         if self.method == "newton":
             bounding_box = torch.cat(
@@ -113,40 +159,17 @@ class Explorer:
                                            lrate=self.gradient_lr,
                                            device=self.device)
 
-        output_point_cloud = PointCloud(sample_vars=self.func.input_names,
-                                        sample_data=output_data)
+        return PointCloud(sample_vars=self.func.input_names,
+                          sample_data=output_data)
 
-        eval_output = output_point_cloud.evaluate(
-            variables=list(self.equations.keys()),
-            expressions=[equ["expr"] for equ in self.equations.values()])
-        tolerances = list(self.tolerances.detach().cpu().numpy())
-        output_point_cloud = output_point_cloud.prune_by_tolerances(
-            eval_output=eval_output,
-            tolerances=tolerances)
-        print("After checking tolerances we have {} designs".format(
-            output_point_cloud.num_points))
-
-        output_point_cloud = output_point_cloud.prune_close_points(
-            resolutions=self.constraints_res)
-        print("After pruning close points we have {} designs".format(
-            output_point_cloud.num_points))
-
-        output_point_cloud = output_point_cloud.prune_bounding_box(
-            minimums=self.constraints_min,
-            maximums=self.constraints_max)
-        print("After bounding box pruning we have {} designs".format(
-            output_point_cloud.num_points))
-
-        output_data = output_point_cloud.sample_data.to(self.device)
-        self.save_data(output_data)
-
-    def save_data(self, samples: torch.tensor) -> None:
-        filename = os.path.splitext(os.path.basename(self.problem_json))[0] + \
-            (".csv" if self.to_csv else ".npz")
-        file_name = os.path.join(os.path.abspath(self.output_dir), filename)
-        print("Saving generated design points to:", file_name)
-
+    def extend_output_data(self, output_data: PointCloud) -> PointCloud:
+        """
+        Extends output data by fixed values and evaluation of given expressions
+        :param PointCloud output_data: pruned and finalized result of the exploration
+        :return PointCloud: extended output data
+        """
         # Append fixed values to samples
+        samples = output_data.sample_data
         sample_vars = deepcopy(self.func.input_names)
         sample_vars.extend(list(self.fixed_values.keys()))
         sample_vars.extend(list(self.expressions.keys()))
@@ -159,7 +182,6 @@ class Explorer:
         sample_data = np.concatenate(
             (sample_data, columns_fixed_values), axis=1
         )
-
         for name, expr in self.expressions.items():
             try:
                 columns_expressions = self.func.evaluate(
@@ -167,16 +189,8 @@ class Explorer:
             except ValueError as err:
                 raise Exception("Expression " + name + " cannot be evaluated: " + str(err))
             sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
-
-        if self.to_csv:
-            with open(filename, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(sample_vars)
-                writer.writerows(sample_data)
-        else:
-            np.savez_compressed(file_name,
-                                sample_vars=sample_vars,
-                                sample_data=sample_data)
+        return PointCloud(sample_vars=sample_vars,
+                          sample_data=torch.tensor(sample_data, device=self.device))
 
 
 def main(args=None):
