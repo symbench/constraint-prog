@@ -183,33 +183,6 @@ class Explorer:
         good_point_idx = (equation_output.abs() < self.tolerances).all(dim=-1)
         return samples[good_point_idx]
 
-    def prune_close_points(self, output_data: torch.tensor) -> torch.tensor:
-        output_data_tile = torch.tile(
-            output_data, (output_data.shape[0], 1, 1))
-        output_data_1kn = output_data.reshape(
-            (1, output_data.shape[0], output_data.shape[1]))
-        output_data_k1n = output_data.reshape(
-            (output_data.shape[0], 1, output_data.shape[1]))
-        output_data_compare = output_data_1kn ** 2 - 2 * \
-            output_data_tile * output_data_k1n + output_data_k1n ** 2
-
-        comparison = torch.tensor(
-            output_data_compare > (self.constraints_res.reshape(
-                (1, 1, self.constraints_res.shape[0])) ** 2)
-        )
-        difference_matrix = torch.sum(comparison.to(int), dim=2)
-        indices = np.array([[(i, j) for j in range(output_data.shape[0])]
-                            for i in range(output_data.shape[0])])
-
-        close_points_bool_idx = torch.tensor(difference_matrix == 0)
-        close_point_idx = indices[close_points_bool_idx.numpy()]
-        close_and_different_points_idx = indices[close_point_idx[:, 0]
-                                                 != close_point_idx[:, 1]]
-        print(close_and_different_points_idx)
-
-        # TODO: from close and different point sets remove all except one
-        return output_data
-
     def prune_close_points2(self, samples: torch.tensor) -> torch.tensor:
         assert samples.ndim == 2 and samples.shape[1] == len(self.constraints_res)
         rounded = samples / self.constraints_res.reshape((1, samples.shape[1]))
