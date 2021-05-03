@@ -68,26 +68,55 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
     [*, output_size].
     The returned tensor is of shape [*, input_size].
     """
+    # Apply standard scaling for the input data
     scaler = TorchStandardScaler()
     scaler.fit(x=in_data)
     scaled_in_data = scaler.transform(x=in_data)
 
+    # Proposed solution: create data
     inp_data = torch.clone(
         scaled_in_data.reshape(-1, scaled_in_data.shape[-1]).to(device)
     )
     inp_data.requires_grad = True
-    for _ in range(it):
-        inp_data0 = scaler.rescale(x=inp_data)
 
+    # Benchmark: create data and list of optimizers
+    inp_data_bench = []
+    optim_list = []
+    for x in inp_data:
+        y = x.clone().detach()
+        y.requires_grad = True
+        inp_data_bench.append(y)
+        optim_list.append(torch.optim.SGD(params=[y], lr=lrate))
+
+    for _ in range(it):
+        # Proposed solution
+        # 1. Rescale input data for evaluating f
+        inp_data0 = scaler.rescale(x=inp_data)
+        # 2. Compute squared error from zero
         val = (f(inp_data0).pow(2.0).sum(dim=-1)).pow(0.5)
+        # 3. Compute gradients
         inp_data.grad = torch.autograd.grad(
             outputs=val,
-            inputs=inp_data0,
+            inputs=inp_data,
             grad_outputs=torch.ones(inp_data.shape[0]).to(device)
         )[0]
-
+        # 4. Apply one step of gradient descent method
         with torch.no_grad():
             inp_data -= lrate * inp_data.grad
+        # 5. Reset gradient
         inp_data.grad.zero_()
 
-    return scaler.rescale(inp_data)
+        # Benchmark
+        for data, optim in zip(inp_data_bench, optim_list):
+            # 1. Rescale data (vector) for evaluating f
+            data_rescaled = scaler.rescale(x=data.view((1, -1)))
+            # 2. Compute squared error from zero
+            val_bench = (f(data_rescaled).pow(2.0).sum(dim=-1)).pow(0.5)
+            # 3. Reset gradient
+            optim.zero_grad()
+            # 4. Compute gradients
+            val_bench.backward()
+            # 5. Apply one step of gradient descent method
+            optim.step()
+
+    return scaler.rescale(x=inp_data)
