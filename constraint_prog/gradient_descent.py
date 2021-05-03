@@ -88,14 +88,15 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
             y = x.clone().detach()
             y.requires_grad = True
             inp_data_bench.append(y)
-            optim_list.append(torch.optim.SGD(params=[y], lr=lrate))
+            optim_list.append(
+                torch.optim.SGD(params=[y], lr=lrate))
 
     for _ in range(it):
         # Proposed solution
         # 1. Rescale input data for evaluating f
-        inp_data0 = scaler.rescale(x=inp_data)
+        inp_data_rescaled = scaler.rescale(x=inp_data)
         # 2. Compute squared error from zero
-        val = (f(inp_data0).pow(2.0).sum(dim=-1)).pow(0.5)
+        val = (f(inp_data_rescaled).pow(2.0).sum(dim=-1)).pow(0.5)
         # 3. Compute gradients
         inp_data.grad = torch.autograd.grad(
             outputs=val,
