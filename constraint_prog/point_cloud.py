@@ -218,7 +218,7 @@ class PointCloud:
         Calculates the distance of the given point to the pareto front. The
         shape of the point list must be [num_vars]. The returned distance is
         positive in the dominated (feasible) region, and negative in the
-        nondominated region and zero precisely on the Pareto front. The
+        non-dominated region and zero precisely on the Pareto front. The
         meaning of the directions is exactly as in the prune_pareto_dominated 
         method.
         """
@@ -237,7 +237,13 @@ class PointCloud:
                 point2.append(point[idx])
         assert sample_data
         sample_data = torch.stack(sample_data, dim=1)
-        point = torch.tensor(point, dtype=torch.float32)
+        point = torch.tensor(point2, dtype=torch.float32, device=sample_data.device)
+
+        test1 = sample_data <= point.reshape((1, -1))
+        test2 = test1.all(dim=1)
+
+        if test2.any().item():
+            pass
 
     def evaluate(self, variables: List[str],
                  expressions: List[sympy.Expr]) -> 'PointCloud':
