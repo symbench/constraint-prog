@@ -222,7 +222,22 @@ class PointCloud:
         meaning of the directions is exactly as in the prune_pareto_dominated 
         method.
         """
-        pass
+        assert len(directions) == self.num_vars
+        assert len(point) == self.num_vars
+
+        # gather data for minimization in all coordinates
+        sample_data = []
+        point2 = []
+        for idx in range(self.num_vars):
+            if directions[idx] == 0.0:
+                continue
+            else:
+                data = self.sample_data[:, idx]
+                sample_data.append(data if directions[idx] < 0.0 else -data)
+                point2.append(point[idx])
+        assert sample_data
+        sample_data = torch.stack(sample_data, dim=1)
+        point = torch.tensor(point, dtype=torch.float32)
 
     def evaluate(self, variables: List[str],
                  expressions: List[sympy.Expr]) -> 'PointCloud':
@@ -280,13 +295,14 @@ if __name__ == '__main__':
         points.print_info()
         points = points.prune_bounding_box([-1, -1, -1], [1, 2, 3])
         points.print_info()
-    # points = PointCloud.load('elliptic_curve.npz')
-    points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
+    points = PointCloud.load('elliptic_curve.npz')
+    # points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
+    points.print_info()
     x = sympy.Symbol("x")
     y = sympy.Symbol("y")
-    points = points.evaluate(["x", "y", "z"], [x, y, x + y])
+    points = points.evaluate(["x", "y", "sum"], [x, y, x + y])
+    # points.print_info()
+    points = points.prune_pareto_front([-1.0, -1.0, 0.0])
     points.print_info()
-    # points = points.prune_pareto_front([-1.0, -1.0, -1.0])
-    points = points.prune_by_tolerances([1.0, 0.3, 0.5])
-    points.print_info()
-    points.plot2d(0, 1)
+    # points.plot2d(0, 1)
+    points.get_pareto_distance([-1.0, -1.0, 0.0], [0.0, 0.0, 0.0])
