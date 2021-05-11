@@ -116,9 +116,9 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
         # - m_t: first moment
         # - v_t: second moment
         if m_t is None:
-            m_t = inp_data.grad
+            m_t = torch.zeros_like(inp_data.grad)
         if v_t is None:
-            v_t = inp_data.grad.pow(2.0)
+            v_t = torch.zeros_like(inp_data.grad)
         m_t = beta_1 * m_t + (1 - beta_1) * inp_data.grad
         v_t = beta_2 * v_t + (1 - beta_2) * inp_data.grad.pow(2.0)
         # Bias-corrected moment estimates
