@@ -62,12 +62,20 @@ class TorchStandardScaler:
 def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
                      lrate: float, device: torch.device) -> torch.Tensor:
     """
-    Calculates 'it' many iterations of the vanilla gradient descent method.
+    Calculates 'it' many iterations of the Adam method.
     The input_data must of shape [*, input_size]. The func
     function must take a tensor of this shape and produce a tensor of shape
     [*, output_size].
     The returned tensor is of shape [*, input_size].
     """
+    # Adam optimizer: parameters
+    beta_1, beta_2 = (0.9, 0.999)
+    eps = 1e-8
+    # Adam optimizer: stored moments for each iterations
+    m_t = None
+    v_t = None
+
+    # Flag for benchmarking
     is_benchmark_calculated = False
     # Apply standard scaling for the input data
     scaler = TorchStandardScaler()
@@ -80,18 +88,18 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
     )
     inp_data.requires_grad = True
 
+    # Benchmark: create data and list of optimizers
     inp_data_bench = []
     optim_list = []
     if is_benchmark_calculated:
-        # Benchmark: create data and list of optimizers
         for x in inp_data:
             y = x.clone().detach()
             y.requires_grad = True
             inp_data_bench.append(y)
             optim_list.append(
-                torch.optim.SGD(params=[y], lr=lrate))
+                torch.optim.Adam(params=[y], lr=lrate))
 
-    for _ in range(it):
+    for t in range(1, it + 1):
         # Proposed solution
         # 1. Rescale input data for evaluating f
         inp_data_rescaled = scaler.rescale(x=inp_data)
@@ -103,14 +111,31 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
             inputs=inp_data,
             grad_outputs=torch.ones(inp_data.shape[0]).to(device)
         )[0]
-        # 4. Apply one step of gradient descent method
+        # 4. Apply one step of Adam method
+        # a) Moment estimations:
+        # - m_t: first moment
+        # - v_t: second moment
+        if m_t is None:
+            m_t = inp_data.grad
+        if v_t is None:
+            v_t = inp_data.grad.pow(2.0)
+        m_t = beta_1 * m_t + (1 - beta_1) * inp_data.grad
+        v_t = beta_2 * v_t + (1 - beta_2) * inp_data.grad.pow(2.0)
+        # Bias-corrected moment estimates
+        m_t_hat = m_t / (1 - pow(beta_1, float(t)))
+        v_t_hat = v_t / (1 - pow(beta_2, float(t)))
+        # b) Scaling for gradient update step
+        step_scale = lrate / (torch.sqrt(v_t_hat) + eps)
+        # Tensor for update step
+        step_tensor = step_scale * m_t_hat
+        # c) Apply one step of Adam method
         with torch.no_grad():
-            inp_data -= lrate * inp_data.grad
+            inp_data -= step_tensor
         # 5. Reset gradient
         inp_data.grad.zero_()
 
+        # Benchmark
         if is_benchmark_calculated:
-            # Benchmark
             for data, optim in zip(inp_data_bench, optim_list):
                 # 1. Rescale data (vector) for evaluating f
                 data_rescaled = scaler.rescale(x=data.view((1, -1)))
@@ -120,7 +145,9 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
                 optim.zero_grad()
                 # 4. Compute gradients
                 val_bench.backward()
-                # 5. Apply one step of gradient descent method
+                # 5. Apply one step of Adam method
                 optim.step()
+
+        # print("OK")
 
     return scaler.rescale(x=inp_data)
