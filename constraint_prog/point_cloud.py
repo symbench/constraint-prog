@@ -68,7 +68,7 @@ class PointCloud:
         elif ext == ".npz":
             np.savez_compressed(filename,
                                 sample_vars=np.array(self.sample_vars),
-                                sample_data=self.sample_data.numpy())
+                                sample_data=self.sample_data.detach().cpu().numpy())
         else:
             raise ValueError("invalid filename extension")
 
