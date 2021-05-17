@@ -16,19 +16,17 @@
 
 import argparse
 from copy import deepcopy
-import csv
-from inspect import getmembers
-import importlib.util
 import json
 import os
 
 import numpy as np
-import sympy
 import torch
 
 from constraint_prog.sympy_func import SympyFunc, Scaler
 from constraint_prog.gradient_descent import gradient_descent
 from constraint_prog.newton_raphson import newton_raphson
+from constraint_prog.problem_loader import ProblemLoader
+from constraint_prog.point_cloud import PointCloud
 
 
 class Explorer:
@@ -56,12 +54,11 @@ class Explorer:
         with open(problem_json) as f:
             self.json_content = json.loads(f.read())
 
-        self.equations = dict()
-        self.expressions = dict()
-        self.get_equations_and_expressions()
-
-        self.fixed_values = dict()
-        constraints = self.process_constraints()
+        problem = ProblemLoader(problem_json=problem_json)
+        self.equations = problem.equations
+        self.expressions = problem.expressions
+        self.fixed_values = problem.fixed_values
+        constraints = problem.constraints
 
         self.func = SympyFunc(
             expressions=[equ["expr"] for equ in self.equations.values()],
@@ -72,86 +69,15 @@ class Explorer:
             del constraints[unused_key]
 
         assert sorted(constraints.keys()) == self.func.input_names
-        self.constraints_min = torch.tensor(
-            [[constraints[var]["min"] for var in self.func.input_names]],
-            device=self.device)
-        self.constraints_max = torch.tensor(
-            [[constraints[var]["max"] for var in self.func.input_names]],
-            device=self.device)
-        self.constraints_res = torch.tensor(
-            [constraints[var]["resolution"]for var in self.func.input_names],
-            device=self.device)
+        self.constraints_min = [constraints[var]["min"] for var in self.func.input_names]
+        self.constraints_max = [constraints[var]["max"] for var in self.func.input_names]
+        self.constraints_res = [constraints[var]["resolution"] for var in self.func.input_names]
 
         self.tolerances = torch.tensor(
             [equ["tolerance"] for equ in self.equations.values()],
             device=self.device)
         self.tolerances *= self.json_content["global_tolerance"]
         self.scaled_func = Scaler(self.func, 1.0 / self.tolerances)
-
-    def process_constraints(self) -> dict:
-        # disregard entries that start with a dash
-        constraints = {key: val
-                       for (key, val) in self.json_content["variables"].items()
-                       if not key.startswith('-')}
-
-        # collect fixed values and substitute them into the equations
-        self.fixed_values = {key: val["min"]
-                             for (key, val) in constraints.items()
-                             if val["min"] == val["max"]}
-        for key, val in self.fixed_values.items():
-            print("Fixing {} to {}".format(key, val))
-            for val2 in self.equations.values():
-                val2["expr"] = val2["expr"].subs(sympy.Symbol(key), val)
-            self.expressions = {key2: val2.subs(sympy.Symbol(key), val)
-                                for (key2, val2) in self.expressions.items()}
-            del constraints[key]
-
-        return constraints
-
-    def get_equations_and_expressions(self) -> None:
-        path = os.path.join(
-            os.path.dirname(self.problem_json), self.json_content["source"])
-        print("Loading python file:", path)
-        if not os.path.exists(path):
-            raise FileNotFoundError()
-
-        spec = importlib.util.spec_from_file_location("equmod", path)
-        equmod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(equmod)
-        members = getmembers(equmod)
-
-        def find_member(name_):
-            for member_ in members:
-                if member_[0] == name_:
-                    return member_[1]
-            return None
-
-        self.equations.clear()
-        for (name, conf) in self.json_content["equations"].items():
-            if name.startswith('-'):
-                continue
-            member = find_member(name)
-            if member is None:
-                raise ValueError("equation " + name + " not found")
-            assert (isinstance(member, sympy.Eq) or
-                    isinstance(member, sympy.LessThan) or
-                    isinstance(member, sympy.StrictLessThan) or
-                    isinstance(member, sympy.GreaterThan) or
-                    isinstance(member, sympy.StrictGreaterThan))
-
-            self.equations[name] = {
-                "expr": member,
-                "tolerance": conf["tolerance"]
-            }
-
-        self.expressions.clear()
-        for name in self.json_content["expressions"]:
-            if name.startswith('-'):
-                continue
-            member = find_member(name)
-            if member is None:
-                raise ValueError("expression " + name + " not found")
-            self.expressions[name] = member
 
     def print_equations(self) -> None:
         print("Loaded equations:")
@@ -160,14 +86,66 @@ class Explorer:
         print("Variable names:", ', '.join(self.func.input_names))
 
     def run(self) -> None:
-        input_data = self.generate_input().to(self.device)
-
+        """
+        Runs exploration w.r.t. the given constraints
+        """
+        # Generate sample points
+        sample_data = PointCloud.generate(sample_vars=self.func.input_names,
+                                          minimums=self.constraints_min,
+                                          maximums=self.constraints_max,
+                                          num_points=self.max_points)
         print("Running {} method on {} many design points".format(
-            self.method, input_data.shape[0]))
+            self.method, sample_data.num_points))
+
+        # Run solver
+        output_data = self.run_solver(
+            samples=sample_data)
+
+        # Prune by tolerances
+        eval_output = output_data.evaluate(
+            variables=list(self.equations.keys()),
+            expressions=[equ["expr"] for equ in self.equations.values()])
+        tolerances = list(self.tolerances.detach().cpu().numpy())
+        output_data = output_data.prune_by_tolerances(
+            eval_output=eval_output,
+            tolerances=tolerances)
+        print("After checking tolerances we have {} designs".format(
+            output_data.num_points))
+
+        # Prune close points
+        output_data = output_data.prune_close_points(
+            resolutions=self.constraints_res)
+        print("After pruning close points we have {} designs".format(
+            output_data.num_points))
+
+        # Prune bounding box
+        output_data = output_data.prune_bounding_box(
+            minimums=self.constraints_min,
+            maximums=self.constraints_max)
+        print("After bounding box pruning we have {} designs".format(
+            output_data.num_points))
+
+        # Save results
+        filename = os.path.splitext(os.path.basename(self.problem_json))[0] + \
+            (".csv" if self.to_csv else ".npz")
+        file_name = os.path.join(os.path.abspath(self.output_dir), filename)
+        print("Saving generated design points to:", file_name)
+
+        output_data = self.extend_output_data(output_data=output_data)
+        output_data.save(filename=file_name)
+
+    def run_solver(self, samples: PointCloud) -> PointCloud:
+        """
+        Runs selected solver method
+        :param PointCloud samples: generated sample for the exploration
+        :return PointCloud: output of the iterative solver
+        """
+        input_data = samples.sample_data.to(self.device)
         output_data = None
         if self.method == "newton":
             bounding_box = torch.cat(
-                (self.constraints_min, self.constraints_max))
+                (torch.tensor([self.constraints_min], device=self.device),
+                 torch.tensor([self.constraints_max], device=self.device)))
             output_data = newton_raphson(func=self.scaled_func,
                                          input_data=input_data,
                                          num_iter=self.newton_iter,
@@ -181,27 +159,17 @@ class Explorer:
                                            lrate=self.gradient_lr,
                                            device=self.device)
 
-        output_data = self.check_tolerance(output_data)
-        print("After checking tolerances we have {} designs".format(
-            output_data.shape[0]))
+        return PointCloud(sample_vars=self.func.input_names,
+                          sample_data=output_data)
 
-        output_data = self.prune_close_points2(output_data)
-        print("After pruning close points we have {} designs".format(
-            output_data.shape[0]))
-
-        output_data = self.prune_bounding_box(output_data)
-        print("After bounding box pruning we have {} designs".format(
-            output_data.shape[0]))
-
-        self.save_data(output_data)
-
-    def save_data(self, samples: torch.tensor) -> None:
-        filename = os.path.splitext(os.path.basename(self.problem_json))[0] + \
-            (".csv" if self.to_csv else ".npz")
-        file_name = os.path.join(os.path.abspath(self.output_dir), filename)
-        print("Saving generated design points to:", file_name)
-
+    def extend_output_data(self, output_data: PointCloud) -> PointCloud:
+        """
+        Extends output data by fixed values and evaluation of given expressions
+        :param PointCloud output_data: pruned and finalized result of the exploration
+        :return PointCloud: extended output data
+        """
         # Append fixed values to samples
+        samples = output_data.sample_data
         sample_vars = deepcopy(self.func.input_names)
         sample_vars.extend(list(self.fixed_values.keys()))
         sample_vars.extend(list(self.expressions.keys()))
@@ -214,7 +182,6 @@ class Explorer:
         sample_data = np.concatenate(
             (sample_data, columns_fixed_values), axis=1
         )
-
         for name, expr in self.expressions.items():
             try:
                 columns_expressions = self.func.evaluate(
@@ -222,90 +189,8 @@ class Explorer:
             except ValueError as err:
                 raise Exception("Expression " + name + " cannot be evaluated: " + str(err))
             sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
-
-        if self.to_csv:
-            with open(filename, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(sample_vars)
-                writer.writerows(sample_data)
-        else:
-            np.savez_compressed(file_name,
-                                sample_vars=sample_vars,
-                                sample_data=sample_data)
-
-    def generate_input(self) -> torch.tensor:
-        """Generates input data with uniform distribution."""
-        sample = torch.rand(
-            size=(self.max_points, self.func.input_size),
-            device=self.device)
-        sample *= (self.constraints_max - self.constraints_min)
-        sample += self.constraints_min
-        return sample
-
-    def check_tolerance(self, samples: torch.tensor) -> torch.tensor:
-        """
-        Evaluates the given list of designs and returns a new list for
-        which the absolute errors is less than the tolerance.
-        """
-        equation_output = self.func(samples)
-        good_point_idx = (equation_output.abs() < self.tolerances).all(dim=-1)
-        return samples[good_point_idx]
-
-    def prune_close_points(self, output_data: torch.tensor) -> torch.tensor:
-        output_data_tile = torch.tile(
-            output_data, (output_data.shape[0], 1, 1))
-        output_data_1kn = output_data.reshape(
-            (1, output_data.shape[0], output_data.shape[1]))
-        output_data_k1n = output_data.reshape(
-            (output_data.shape[0], 1, output_data.shape[1]))
-        output_data_compare = output_data_1kn ** 2 - 2 * \
-            output_data_tile * output_data_k1n + output_data_k1n ** 2
-
-        comparison = torch.tensor(
-            output_data_compare > (self.constraints_res.reshape(
-                (1, 1, self.constraints_res.shape[0])) ** 2)
-        )
-        difference_matrix = torch.sum(comparison.to(int), dim=2)
-        indices = np.array([[(i, j) for j in range(output_data.shape[0])]
-                            for i in range(output_data.shape[0])])
-
-        close_points_bool_idx = torch.tensor(difference_matrix == 0)
-        close_point_idx = indices[close_points_bool_idx.numpy()]
-        close_and_different_points_idx = indices[close_point_idx[:, 0]
-                                                 != close_point_idx[:, 1]]
-        print(close_and_different_points_idx)
-
-        # TODO: from close and different point sets remove all except one
-        return output_data
-
-    def prune_close_points2(self, samples: torch.tensor) -> torch.tensor:
-        assert samples.ndim == 2 and samples.shape[1] == len(self.constraints_res)
-        rounded = samples / self.constraints_res.reshape((1, samples.shape[1]))
-        rounded = rounded.round().type(torch.int64)
-
-        # hash based filtering is not unique, but good enough
-        randcoef = torch.randint(
-            -10000000, 10000000, (1, samples.shape[1]),
-            device=self.device)
-        hashnums = (rounded * randcoef).sum(dim=1).cpu()
-
-        # this is slow, but good enough
-        selected = torch.zeros(samples.shape[0]).bool()
-        hashset = set()
-        for idx in range(samples.shape[0]):
-            value = int(hashnums[idx])
-            if value not in hashset:
-                hashset.add(value)
-                selected[idx] = True
-
-        return samples[selected.to(samples.device)]
-
-    def prune_bounding_box(self, samples: torch.tensor) -> torch.tensor:
-        assert samples.ndim == 2
-        selected = torch.logical_and(samples >= self.constraints_min,
-                                     samples <= self.constraints_max)
-        selected = selected.all(dim=1)
-        return samples[selected]
+        return PointCloud(sample_vars=sample_vars,
+                          sample_data=torch.tensor(sample_data, device=self.device))
 
 
 def main(args=None):

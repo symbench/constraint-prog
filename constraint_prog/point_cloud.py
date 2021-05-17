@@ -68,7 +68,7 @@ class PointCloud:
         elif ext == ".npz":
             np.savez_compressed(filename,
                                 sample_vars=np.array(self.sample_vars),
-                                sample_data=self.sample_data.numpy())
+                                sample_data=self.sample_data.detach().cpu().numpy())
         else:
             raise ValueError("invalid filename extension")
 
@@ -169,14 +169,15 @@ class PointCloud:
 
         return PointCloud(self.sample_vars, self.sample_data[sel3])
 
-    def prune_by_tolerances(self, tolerances: List[float]) -> 'PointCloud':
+    def prune_by_tolerances(self, tolerances: List[float],
+                            eval_output: 'PointCloud') -> 'PointCloud':
         """
         Returns those points where all coodrinates are smaller in absolute 
         value than the given tolerance. The length of tolerances must be
         num_vars.
         """
-        assert len(tolerances) == self.num_vars
-        sel = self.sample_data.abs() <= torch.tensor(tolerances, device=self.device)
+        assert len(tolerances) == eval_output.num_vars
+        sel = eval_output.sample_data.abs() <= torch.tensor(tolerances, device=self.device)
         return PointCloud(self.sample_vars, self.sample_data[sel.all(dim=1)])
 
     def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
