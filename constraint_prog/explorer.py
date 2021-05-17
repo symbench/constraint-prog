@@ -102,12 +102,12 @@ class Explorer:
             samples=sample_data)
 
         # Prune by tolerances
-        eval_output = output_data.evaluate(
+        magnitudes = output_data.evaluate(
             variables=list(self.equations.keys()),
             expressions=[equ["expr"] for equ in self.equations.values()])
         tolerances = list(self.tolerances.detach().cpu().numpy())
         output_data = output_data.prune_by_tolerances(
-            eval_output=eval_output,
+            magnitudes=magnitudes,
             tolerances=tolerances)
         print("After checking tolerances we have {} designs".format(
             output_data.num_points))
