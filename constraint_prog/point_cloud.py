@@ -68,7 +68,7 @@ class PointCloud:
         elif ext == ".npz":
             np.savez_compressed(filename,
                                 sample_vars=np.array(self.sample_vars),
-                                sample_data=self.sample_data.detach().cpu().numpy())
+                                sample_data=self.sample_data.detach().float().cpu().numpy())
         else:
             raise ValueError("invalid filename extension")
 
@@ -86,7 +86,7 @@ class PointCloud:
         elif ext == ".npz":
             data = np.load(filename, allow_pickle=False)
             sample_vars = list(data["sample_vars"])
-            sample_data = torch.tensor(data["sample_data"])
+            sample_data = torch.tensor(data["sample_data"], dtype=torch.float32)
             return PointCloud(sample_vars, sample_data)
         else:
             raise ValueError("invalid filename extension")
@@ -216,37 +216,39 @@ class PointCloud:
 
         return PointCloud(self.sample_vars, self.sample_data[selected, :])
 
-    def get_pareto_distance(self, directions: List[float], point: List[float]) -> float:
+    def get_pareto_distance(self, directions: List[float],
+                            points: torch.Tensor) -> torch.Tensor:
         """
-        Calculates the distance of the given point to the pareto front. The
-        shape of the point list must be [num_vars]. The returned distance is
-        positive in the dominated (feasible) region, and negative in the
-        non-dominated region and zero precisely on the Pareto front. The
-        meaning of the directions is exactly as in the prune_pareto_dominated
-        method.
+        Calculates the distance of the given points to the pareto front. The
+        shape of the points tensor must be [*,num_vars], and the returned
+        tensor is of shape [*]. The returned distances is zero in the dominated
+        (feasible) region, and positive in the non-dominated region. The meaning
+        of the directions is exactly as in the prune_pareto_dominated method.
         """
         assert len(directions) == self.num_vars
-        assert len(point) == self.num_vars
+        assert points.shape[-1] == self.num_vars
 
         # gather data for minimization in all coordinates
         sample_data = []
-        point2 = []
+        points2 = points.to(self.device).unbind(dim=-1)
+        points = []
         for idx in range(self.num_vars):
             if directions[idx] == 0.0:
                 continue
             else:
                 data = self.sample_data[:, idx]
                 sample_data.append(data if directions[idx] < 0.0 else -data)
-                point2.append(point[idx])
+                data = points2[idx]
+                points.append(data if directions[idx] < 0.0 else -data)
         assert sample_data
         sample_data = torch.stack(sample_data, dim=1)
-        point = torch.tensor(point2, dtype=torch.float32, device=sample_data.device)
+        points = torch.stack(points, dim=-1)
 
-        test1 = sample_data <= point.reshape((1, -1))
-        test2 = test1.all(dim=1)
-
-        if test2.any().item():
-            pass
+        # calculate minimal distance
+        points = points.reshape(points.shape[:-1] + (1, points.shape[-1]))
+        sample_data = (sample_data - points).clamp(min=0.0)
+        sample_data = sample_data.pow(2.0).sum(dim=-1).min(dim=-1).values
+        return sample_data.sqrt()
 
     def evaluate(self, variables: List[str],
                  expressions: List[sympy.Expr]) -> 'PointCloud':
@@ -309,9 +311,21 @@ if __name__ == '__main__':
     points.print_info()
     x = sympy.Symbol("x")
     y = sympy.Symbol("y")
-    points = points.evaluate(["x", "y", "sum"], [x, y, x + y])
+    points = points.evaluate(["x", "y"], [x, y])
     # points.print_info()
-    points = points.prune_pareto_front([-1.0, -1.0, 0.0])
+    points = points.prune_pareto_front([-1.0, -1.0])
     points.print_info()
-    # points.plot2d(0, 1)
-    points.get_pareto_distance([-1.0, -1.0, 0.0], [0.0, 0.0, 0.0])
+    points.plot2d(0, 1)
+
+    xpos = torch.linspace(-2.0, 2.0, 50)
+    ypos = torch.linspace(-2.0, 0.0, 50)
+    mesh = torch.stack(torch.meshgrid(xpos, ypos), dim=-1)
+    dist = points.get_pareto_distance([-1, -1], mesh)
+
+    print(mesh.shape, dist.shape)
+    fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
+    ax1.plot_surface(
+        mesh[:, :, 0].numpy(),
+        mesh[:, :, 1].numpy(),
+        dist.numpy())
+    plt.show()
