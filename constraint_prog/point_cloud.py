@@ -68,7 +68,7 @@ class PointCloud:
         elif ext == ".npz":
             np.savez_compressed(filename,
                                 sample_vars=np.array(self.sample_vars),
-                                sample_data=self.sample_data.numpy())
+                                sample_data=self.sample_data.detach().cpu().numpy())
         else:
             raise ValueError("invalid filename extension")
 
@@ -158,7 +158,7 @@ class PointCloud:
         """
         Returns those points that lie in the specified bounding box in a new
         point cloud. The shape of the minimums and maximums lists must be of
-        shape [num_vars]. If no bound is necessary, then use -inf or inf for 
+        shape [num_vars]. If no bound is necessary, then use -inf or inf for
         that value.
         """
         assert len(minimums) == self.num_vars and len(maximums) == self.num_vars
@@ -169,14 +169,17 @@ class PointCloud:
 
         return PointCloud(self.sample_vars, self.sample_data[sel3])
 
-    def prune_by_tolerances(self, tolerances: List[float]) -> 'PointCloud':
+    def prune_by_tolerances(self, magnitudes: 'PointCloud',
+                            tolerances: List[float]) -> 'PointCloud':
         """
-        Returns those points where all coodrinates are smaller in absolute 
-        value than the given tolerance. The length of tolerances must be
-        num_vars.
+        Returns those points where the given magnitudes are smaller in absolute
+        value than the given tolerances. The length of tolerances must be
+        the number of variables of magnitudes, and the the number of points
+        of magniteds must match that of this point cloud.
         """
-        assert len(tolerances) == self.num_vars
-        sel = self.sample_data.abs() <= torch.tensor(tolerances, device=self.device)
+        assert len(tolerances) == magnitudes.num_vars
+        assert self.num_points == magnitudes.num_points
+        sel = magnitudes.sample_data.abs() <= torch.tensor(tolerances, device=self.device)
         return PointCloud(self.sample_vars, self.sample_data[sel.all(dim=1)])
 
     def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
@@ -186,7 +189,7 @@ class PointCloud:
         must be of shape [num_vars]. If the direction is negative, then we prefer
         a smaller value all other values being equal (e.g. price). If the direction
         is positive, then we prefer a larger value (e.g. speed). If the direction
-        is zero, then that variable does not participate in the Pareto front 
+        is zero, then that variable does not participate in the Pareto front
         calculation, but their values are kept for selected points.
         """
         assert len(directions) == self.num_vars
@@ -219,7 +222,7 @@ class PointCloud:
         shape of the point list must be [num_vars]. The returned distance is
         positive in the dominated (feasible) region, and negative in the
         non-dominated region and zero precisely on the Pareto front. The
-        meaning of the directions is exactly as in the prune_pareto_dominated 
+        meaning of the directions is exactly as in the prune_pareto_dominated
         method.
         """
         assert len(directions) == self.num_vars
