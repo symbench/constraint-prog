@@ -78,8 +78,7 @@ def pseudo_inverse2(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor
     device = matrix.device
 
     # SVD is really slow on CUDA, do it on the CPU
-    if device == torch.device("cuda:0"):
-        matrix = matrix.cpu()
+    matrix = matrix.cpu()
 
     try:
         u, s, v = torch.linalg.svd(
@@ -89,10 +88,10 @@ def pseudo_inverse2(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor
         assert matrix.isfinite().all().item()
         raise
 
-    if device == torch.device("cuda:0"):
-        u = u.to(device)
-        s = s.to(device)
-        v = v.to(device)
+    # move it back to the original device
+    u = u.to(device)
+    s = s.to(device)
+    v = v.to(device)
 
     s = 1.0 / torch.clamp(s, min=epsilon)
     s = torch.diag_embed(s)
