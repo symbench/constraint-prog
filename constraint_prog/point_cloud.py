@@ -28,31 +28,42 @@ from constraint_prog.sympy_func import SympyFunc
 
 
 class PointCloud:
-    def __init__(self, sample_vars: List[str], sample_data: torch.Tensor):
+    def __init__(self, float_vars: List[str], float_data: torch.Tensor,
+                 string_vars: List[str] = None, string_data: np.ndarray = None):
         """
         Creates a point cloud with num_vars many named coordinates.
-        The shape of the sample_data must be [num_points, num_vars].
+        The shape of the float_data must be [num_points, num_vars].
         """
-        assert sample_data.ndim == 2
-        assert sample_data.shape[1] == len(sample_vars)
-        self.sample_vars = sample_vars
-        self.sample_data = sample_data
+        assert float_data.ndim == 2
+        assert float_data.shape[1] == len(float_vars)
+        self.float_vars = float_vars
+        self.float_data = float_data
+
+        if string_vars is None:
+            self.string_vars = []
+            self.string_data = np.empty(shape=(float_data.shape[0], 0), dtype=str)
 
     @property
-    def num_vars(self):
-        return len(self.sample_vars)
+    def num_float_vars(self):
+        return len(self.float_vars)
+
+    @property
+    def num_string_vars(self):
+        return len(self.string_vars)
 
     @property
     def num_points(self):
-        return self.sample_data.shape[0]
+        return self.float_data.shape[0]
 
     @property
     def device(self):
-        return self.sample_data.device
+        return self.float_data.device
 
     def print_info(self):
-        print("shape: {}".format(list(self.sample_data.shape)))
-        print("names: {}".format(', '.join(self.sample_vars)))
+        print("float shape: {}".format(list(self.float_data.shape)))
+        print("float names: {}".format(', '.join(self.float_vars)))
+        print("string shape: {}".format(list(self.string_data.shape)))
+        print("string names: {}".format(', '.join(self.string_vars)))
 
     def save(self, filename: str):
         """
@@ -63,12 +74,12 @@ class PointCloud:
         if ext == ".csv":
             with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(self.sample_vars)
-                writer.writerows(self.sample_data.numpy())
+                writer.writerow(self.float_vars)
+                writer.writerows(self.float_data.numpy())
         elif ext == ".npz":
             np.savez_compressed(filename,
-                                sample_vars=np.array(self.sample_vars),
-                                sample_data=self.sample_data.detach().float().cpu().numpy())
+                                sample_vars=np.array(self.float_vars),
+                                sample_data=self.float_data.detach().float().cpu().numpy())
         else:
             raise ValueError("invalid filename extension")
 
@@ -80,40 +91,41 @@ class PointCloud:
         ext = os.path.splitext(filename)[1]
         if ext == ".csv":
             data = np.genfromtxt(filename, delimiter=',', dtype=np.float32, names=True)
-            sample_vars = list(data.dtype.names)
-            sample_data = data.view(dtype=np.float32).reshape((-1, len(sample_vars)))
-            return PointCloud(sample_vars, torch.tensor(sample_data))
+            float_vars = list(data.dtype.names)
+            float_data = data.view(dtype=np.float32).reshape((-1, len(float_vars)))
+            return PointCloud(float_vars, torch.tensor(float_data))
         elif ext == ".npz":
             data = np.load(filename, allow_pickle=False)
-            sample_vars = list(data["sample_vars"])
-            sample_data = torch.tensor(data["sample_data"], dtype=torch.float32)
-            return PointCloud(sample_vars, sample_data)
+            # TODO: use float_vars but make it backwards compatible
+            float_vars = list(data["sample_vars"])
+            float_data = torch.tensor(data["sample_data"], dtype=torch.float32)
+            return PointCloud(float_vars, float_data)
         else:
             raise ValueError("invalid filename extension")
 
     @staticmethod
-    def generate(sample_vars: List[str],
+    def generate(float_vars: List[str],
                  minimums: List[float], maximums: List[float],
                  num_points: int, device='cpu') -> 'PointCloud':
         """
         Creates a new point cloud with the given number of points and
         bounding box with uniform distribution.
         """
-        assert len(sample_vars) == len(minimums)
-        assert len(sample_vars) == len(maximums)
+        assert len(float_vars) == len(minimums)
+        assert len(float_vars) == len(maximums)
 
         minimums = torch.tensor(minimums, device=device)
         maximums = torch.tensor(maximums, device=device)
-        sample_data = torch.rand(size=(num_points, len(sample_vars)),
-                                 device=device)
-        sample_data = sample_data * (maximums - minimums) + minimums
-        return PointCloud(sample_vars, sample_data)
+        float_data = torch.rand(size=(num_points, len(float_vars)),
+                                device=device)
+        float_data = float_data * (maximums - minimums) + minimums
+        return PointCloud(float_vars, float_data)
 
     def to_device(self, device="cpu"):
         """
         Moves the sample data to the given device.
         """
-        self.sample_data = self.sample_data.to(device)
+        self.float_data = self.float_data.to(device)
 
     def prune_close_points(self, resolutions: List[float], keep=1) -> 'PointCloud':
         """
@@ -124,7 +136,7 @@ class PointCloud:
         where the resolution is positive. The resolution list must be of shape
         [num_vars].
         """
-        assert keep >= 1 and len(resolutions) == self.num_vars
+        assert keep >= 1 and len(resolutions) == self.num_float_vars
 
         resolutions = torch.tensor(list(resolutions))
         multiplier = resolutions.clamp(min=0.0)
@@ -132,27 +144,27 @@ class PointCloud:
         multiplier[indices] = 1.0 / multiplier[indices]
         multiplier = multiplier.to(self.device)
 
-        rounded = (self.sample_data * multiplier).round().type(torch.int64)
+        rounded = (self.float_data * multiplier).round().type(torch.int64)
         multiplier = None
 
         # hash based filtering is not unique, but good enough
-        randcoef = torch.randint(-10000000, 10000000, (self.num_vars, ),
+        randcoef = torch.randint(-10000000, 10000000, (self.num_float_vars, ),
                                  device=self.device)
         hashnums = (rounded * randcoef).sum(dim=1).cpu()
         rounded = None
 
         # this is slow, but good enough
-        sample_data = self.sample_data.cpu()
-        selected = torch.zeros(sample_data.shape[0]).bool()
+        float_data = self.float_data.cpu()
+        selected = torch.zeros(float_data.shape[0]).bool()
         counter = Counter()
-        for idx in range(sample_data.shape[0]):
+        for idx in range(float_data.shape[0]):
             value = int(hashnums[idx])
             if counter[value] < keep:
                 counter[value] += 1
                 selected[idx] = True
 
-        sample_data = sample_data[selected].to(self.device)
-        return PointCloud(self.sample_vars, sample_data)
+        float_data = float_data[selected].to(self.device)
+        return PointCloud(self.float_vars, float_data)
 
     def prune_bounding_box(self, minimums: List[float], maximums: List[float]) -> 'PointCloud':
         """
@@ -161,13 +173,13 @@ class PointCloud:
         shape [num_vars]. If no bound is necessary, then use -inf or inf for
         that value.
         """
-        assert len(minimums) == self.num_vars and len(maximums) == self.num_vars
+        assert len(minimums) == self.num_float_vars and len(maximums) == self.num_float_vars
 
-        sel1 = self.sample_data >= torch.tensor(minimums, device=self.device)
-        sel2 = self.sample_data <= torch.tensor(maximums, device=self.device)
+        sel1 = self.float_data >= torch.tensor(minimums, device=self.device)
+        sel2 = self.float_data <= torch.tensor(maximums, device=self.device)
         sel3 = torch.logical_and(sel1, sel2).all(dim=1)
 
-        return PointCloud(self.sample_vars, self.sample_data[sel3])
+        return PointCloud(self.float_vars, self.float_data[sel3])
 
     def prune_by_tolerances(self, magnitudes: 'PointCloud',
                             tolerances: List[float]) -> 'PointCloud':
@@ -179,8 +191,8 @@ class PointCloud:
         """
         assert len(tolerances) == magnitudes.num_vars
         assert self.num_points == magnitudes.num_points
-        sel = magnitudes.sample_data.abs() <= torch.tensor(tolerances, device=self.device)
-        return PointCloud(self.sample_vars, self.sample_data[sel.all(dim=1)])
+        sel = magnitudes.float_data.abs() <= torch.tensor(tolerances, device=self.device)
+        return PointCloud(self.float_vars, self.float_data[sel.all(dim=1)])
 
     def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
         """
@@ -192,29 +204,29 @@ class PointCloud:
         is zero, then that variable does not participate in the Pareto front
         calculation, but their values are kept for selected points.
         """
-        assert len(directions) == self.num_vars
+        assert len(directions) == self.num_float_vars
 
         # gather data for minimization in all coordinates
-        sample_data = []
-        for idx in range(self.num_vars):
+        float_data = []
+        for idx in range(self.num_float_vars):
             if directions[idx] == 0.0:
                 continue
             else:
-                data = self.sample_data[:, idx]
-                sample_data.append(data if directions[idx] < 0.0 else -data)
-        assert sample_data
-        sample_data = torch.stack(sample_data, dim=1)
+                data = self.float_data[:, idx]
+                float_data.append(data if directions[idx] < 0.0 else -data)
+        assert float_data
+        float_data = torch.stack(float_data, dim=1)
 
         # TODO: find a faster algorithm than this quadratic
         selected = torch.ones(self.num_points, dtype=bool)
         for idx in range(self.num_points):
-            test1 = (sample_data[:idx, :] <= sample_data[idx]).all(dim=1)
-            test2 = (sample_data[:idx, :] != sample_data[idx]).any(dim=1)
+            test1 = (float_data[:idx, :] <= float_data[idx]).all(dim=1)
+            test2 = (float_data[:idx, :] != float_data[idx]).any(dim=1)
             test3 = torch.logical_and(test1, test2).any().item()
-            test4 = (sample_data[idx + 1:, :] <= sample_data[idx]).all(dim=1).any().item()
+            test4 = (float_data[idx + 1:, :] <= float_data[idx]).all(dim=1).any().item()
             selected[idx] = not (test3 or test4)
 
-        return PointCloud(self.sample_vars, self.sample_data[selected, :])
+        return PointCloud(self.float_vars, self.float_data[selected, :])
 
     def get_pareto_distance(self, directions: List[float],
                             points: torch.Tensor) -> torch.Tensor:
@@ -225,30 +237,30 @@ class PointCloud:
         (feasible) region, and positive in the non-dominated region. The meaning
         of the directions is exactly as in the prune_pareto_dominated method.
         """
-        assert len(directions) == self.num_vars
-        assert points.shape[-1] == self.num_vars
+        assert len(directions) == self.num_float_vars
+        assert points.shape[-1] == self.num_float_vars
 
         # gather data for minimization in all coordinates
-        sample_data = []
+        float_data = []
         points2 = points.to(self.device).unbind(dim=-1)
         points = []
-        for idx in range(self.num_vars):
+        for idx in range(self.num_float_vars):
             if directions[idx] == 0.0:
                 continue
             else:
-                data = self.sample_data[:, idx]
-                sample_data.append(data if directions[idx] < 0.0 else -data)
+                data = self.float_data[:, idx]
+                float_data.append(data if directions[idx] < 0.0 else -data)
                 data = points2[idx]
                 points.append(data if directions[idx] < 0.0 else -data)
-        assert sample_data
-        sample_data = torch.stack(sample_data, dim=1)
+        assert float_data
+        float_data = torch.stack(float_data, dim=1)
         points = torch.stack(points, dim=-1)
 
         # calculate minimal distance
         points = points.reshape(points.shape[:-1] + (1, points.shape[-1]))
-        sample_data = (sample_data - points).clamp(min=0.0)
-        sample_data = sample_data.pow(2.0).sum(dim=-1).min(dim=-1).values
-        return sample_data.sqrt()
+        float_data = (float_data - points).clamp(min=0.0)
+        float_data = float_data.pow(2.0).sum(dim=-1).min(dim=-1).values
+        return float_data.sqrt()
 
     def evaluate(self, variables: List[str],
                  expressions: List[sympy.Expr]) -> 'PointCloud':
@@ -261,12 +273,12 @@ class PointCloud:
         """
         assert len(variables) == len(expressions)
         func = SympyFunc(expressions, device=self.device)
-        assert all(var in self.sample_vars for var in func.input_names)
+        assert all(var in self.float_vars for var in func.input_names)
 
         input_data = []
         for var in func.input_names:
-            idx = self.sample_vars.index(var)
-            input_data.append(self.sample_data[:, idx])
+            idx = self.float_vars.index(var)
+            input_data.append(self.float_data[:, idx])
         input_data = torch.stack(input_data, dim=1)
 
         return PointCloud(variables, func(input_data))
@@ -277,23 +289,23 @@ class PointCloud:
         variables. The elements of the variables list must be between 0
         and num_vars - 1.
         """
-        sample_vars = [self.sample_vars[idx] for idx in variables]
-        sample_data = [self.sample_data[:, idx] for idx in variables]
-        sample_data = torch.stack(sample_data, dim=1)
-        return PointCloud(sample_vars, sample_data)
+        float_vars = [self.float_vars[idx] for idx in variables]
+        float_data = [self.float_data[:, idx] for idx in variables]
+        float_data = torch.stack(float_data, dim=1)
+        return PointCloud(float_vars, float_data)
 
     def plot2d(self, idx1: int, idx2: int, point_size: float = 5.0):
         """
         Plots the 2d projection of the point cloud to the given coordinates.
         """
-        assert 0 <= idx1 < self.num_vars and 0 <= idx2 < self.num_vars
+        assert 0 <= idx1 < self.num_float_vars and 0 <= idx2 < self.num_float_vars
         fig, ax1 = plt.subplots()
         ax1.scatter(
-            self.sample_data[:, idx1].numpy(),
-            self.sample_data[:, idx2].numpy(),
+            self.float_data[:, idx1].numpy(),
+            self.float_data[:, idx2].numpy(),
             s=point_size)
-        ax1.set_xlabel(self.sample_vars[idx1])
-        ax1.set_ylabel(self.sample_vars[idx2])
+        ax1.set_xlabel(self.float_vars[idx1])
+        ax1.set_ylabel(self.float_vars[idx2])
         plt.show()
 
 
@@ -309,6 +321,9 @@ if __name__ == '__main__':
     points = PointCloud.load('elliptic_curve.npz')
     # points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
     points.print_info()
+
+    points2 = PointCloud(points.float_vars, points.float_data)
+
     x = sympy.Symbol("x")
     y = sympy.Symbol("y")
     points = points.evaluate(["x", "y"], [x, y])
