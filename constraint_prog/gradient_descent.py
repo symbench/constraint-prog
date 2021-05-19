@@ -72,8 +72,6 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
     m_t = None
     v_t = None
 
-    # Flag for benchmarking
-    is_benchmark_calculated = False
     # Apply standard scaling for the input data
     scaler = TorchStandardScaler()
     scaler.fit(x=in_data)
@@ -90,17 +88,6 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
         scaler.transform(x=inp_data)
     # Generate matrix of 1s with shape of inp_data
     ones = torch.ones(inp_data.shape[0], device=device)
-
-    # Benchmark: create data and list of optimizers
-    inp_data_bench = []
-    optim_list = []
-    if is_benchmark_calculated:
-        for x in inp_data:
-            y = x.clone().detach()
-            y.requires_grad = True
-            inp_data_bench.append(y)
-            optim_list.append(
-                torch.optim.Adam(params=[y], lr=lrate))
 
     for t in range(1, it + 1):
         # Proposed solution
@@ -137,21 +124,6 @@ def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,
             inp_data -= step_tensor
         # 5. Reset gradient
         inp_data.grad.zero_()
-
-        # Benchmark
-        if is_benchmark_calculated:
-            for data, optim in zip(inp_data_bench, optim_list):
-                # 1. Rescale data (vector) for evaluating f
-                with torch.no_grad():
-                    scaler.rescale(x=data.view((1, -1)))
-                # 2. Compute squared error from zero
-                val_bench = (f(data).pow(2.0).sum(dim=-1)).pow(0.5)
-                # 3. Reset gradient
-                optim.zero_grad()
-                # 4. Compute gradients
-                val_bench.backward()
-                # 5. Apply one step of Adam method
-                optim.step()
 
     with torch.no_grad():
         scaler.rescale(x=inp_data)
