@@ -40,9 +40,13 @@ class PointCloud:
         self.float_data = float_data
 
         if string_vars is None:
+            assert string_data is None
             self.string_vars = []
             self.string_data = np.empty(shape=(float_data.shape[0], 0), dtype=str)
         else:
+            assert string_data.ndim == 2
+            assert string_data.shape[0] == float_data.shape[0]
+            assert string_data.shape[1] == len(string_vars)
             self.string_vars = string_vars
             self.string_data = string_data
 
@@ -56,6 +60,7 @@ class PointCloud:
 
     @property
     def num_points(self):
+        assert self.string_data.shape[0] == self.float_data.shape[0]
         return self.float_data.shape[0]
 
     @property
@@ -63,10 +68,10 @@ class PointCloud:
         return self.float_data.device
 
     def print_info(self):
-        print("float shape: {}".format(list(self.float_data.shape)))
-        print("float names: {}".format(', '.join(self.float_vars)))
-        print("string shape: {}".format(list(self.string_data.shape)))
-        print("string names: {}".format(', '.join(self.string_vars)))
+        print("float shape: {}, string shape: {}".format(
+            list(self.float_data.shape), list(self.string_data.shape)))
+        print("float names: {}, string names: {}".format(
+            ', '.join(self.float_vars), ', '.join(self.string_vars)))
 
     def save(self, filename: str):
         """
@@ -127,20 +132,16 @@ class PointCloud:
         elif ext == ".npz":
             data = np.load(file=filename, allow_pickle=False)
 
-            string_vars, string_data = None, None
-
             # Enable backwards compatibility for data files of previous version
             if "sample_vars" in data.files:
                 float_vars = list(data["sample_vars"])
                 float_data = torch.tensor(data["sample_data"], dtype=torch.float32)
+                string_vars, string_data = None, None
             else:
                 float_vars = list(data["float_vars"])
                 float_data = torch.tensor(data["float_data"], dtype=torch.float32)
                 string_vars = list(data["string_vars"])
                 string_data = data["string_data"]
-
-            if len(string_vars) < 1:
-                string_vars, string_data = None, None
 
             return PointCloud(float_vars=float_vars,
                               float_data=float_data,
@@ -395,7 +396,6 @@ if __name__ == '__main__':
     mesh = torch.stack(torch.meshgrid(xpos, ypos), dim=-1)
     dist = points.get_pareto_distance(directions=[-1, -1], points=mesh)
 
-    print(mesh.shape, dist.shape)
     fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
     ax1.plot_surface(
         mesh[:, :, 0].numpy(),
