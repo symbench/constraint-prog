@@ -170,17 +170,17 @@ class Explorer:
         """
         # Append fixed values to samples
         samples = output_data.float_data
-        sample_vars = deepcopy(self.func.input_names)
-        sample_vars.extend(list(self.fixed_values.keys()))
-        sample_vars.extend(list(self.expressions.keys()))
-        sample_data = samples.detach().cpu().numpy()
+        float_vars = deepcopy(self.func.input_names)
+        float_vars.extend(list(self.fixed_values.keys()))
+        float_vars.extend(list(self.expressions.keys()))
+        float_data = samples.detach().cpu().numpy()
         columns_fixed_values = np.repeat(
             np.array([list(self.fixed_values.values())]),
-            sample_data.shape[0],
+            float_data.shape[0],
             axis=0
         )
-        sample_data = np.concatenate(
-            (sample_data, columns_fixed_values), axis=1
+        float_data = np.concatenate(
+            (float_data, columns_fixed_values), axis=1
         )
         for name, expr in self.expressions.items():
             try:
@@ -188,9 +188,9 @@ class Explorer:
                     [expr], samples, equs_as_float=False).detach().cpu().numpy()
             except ValueError as err:
                 raise Exception("Expression " + name + " cannot be evaluated: " + str(err))
-            sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
-        return PointCloud(float_vars=sample_vars,
-                          float_data=torch.tensor(sample_data, device=self.device))
+            float_data = np.concatenate((float_data, columns_expressions), axis=1)
+        return PointCloud(float_vars=float_vars,
+                          float_data=torch.tensor(float_data, device=self.device))
 
 
 def main(args=None):
