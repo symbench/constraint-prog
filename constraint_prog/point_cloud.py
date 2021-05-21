@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2021, Miklos Maroti
+# Copyright (C) 2021, Miklos Maroti, Zsolt Vizi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -36,6 +36,9 @@ class PointCloud:
         """
         assert float_data.ndim == 2
         assert float_data.shape[1] == len(float_vars)
+        unique, freq = np.unique(float_vars, return_count=True)
+        assert len(unique[freq > 1]) == 0  # check whether all variables are unique
+
         self.float_vars = float_vars
         self.float_data = float_data
 
@@ -346,13 +349,14 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data)
 
-    def projection(self, variables: List[int]) -> 'PointCloud':
+    def projection(self, variables: List[str]) -> 'PointCloud':
         """
         Returns the projection of this point cloud to the specified set of
-        variables. The elements of the variables list must be between 0
-        and num_vars - 1.
+        variables. The elements of the variables list must be names of the
+        variables for which the projection is applied.
         """
-        float_vars = [self.float_vars[idx] for idx in variables]
+        float_vars = [self.float_vars[self.float_vars.index(var)]
+                      for var in variables]
         float_data = [self.float_data[:, idx] for idx in variables]
         float_data = torch.stack(float_data, dim=1)
         return PointCloud(float_vars=float_vars,
