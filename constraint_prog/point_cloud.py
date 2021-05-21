@@ -220,7 +220,7 @@ class PointCloud:
         return PointCloud(float_vars=self.float_vars,
                           float_data=float_data,
                           string_vars=self.string_vars,
-                          string_data=self.string_data)
+                          string_data=self.string_data[selected])
 
     def prune_bounding_box(self, minimums: List[float], maximums: List[float]) -> 'PointCloud':
         """
@@ -238,7 +238,7 @@ class PointCloud:
         return PointCloud(float_vars=self.float_vars,
                           float_data=self.float_data[sel3],
                           string_vars=self.string_vars,
-                          string_data=self.string_data)
+                          string_data=self.string_data[sel3])
 
     def prune_by_tolerances(self, magnitudes: 'PointCloud',
                             tolerances: List[float]) -> 'PointCloud':
@@ -254,7 +254,7 @@ class PointCloud:
         return PointCloud(float_vars=self.float_vars,
                           float_data=self.float_data[sel.all(dim=1)],
                           string_vars=self.string_vars,
-                          string_data=self.string_data)
+                          string_data=self.string_data[sel.all(dim=1)])
 
     def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
         """
@@ -291,7 +291,7 @@ class PointCloud:
         return PointCloud(float_vars=self.float_vars,
                           float_data=self.float_data[selected, :],
                           string_vars=self.string_vars,
-                          string_data=self.string_data)
+                          string_data=self.string_data[selected, :])
 
     def get_pareto_distance(self, directions: List[float],
                             points: torch.Tensor) -> torch.Tensor:
