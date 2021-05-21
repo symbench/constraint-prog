@@ -36,10 +36,8 @@ class PointCloud:
         """
         assert float_data.ndim == 2
         assert float_data.shape[1] == len(float_vars)
-        unique, freq = np.unique(float_vars, return_count=True)
-        assert len(unique[freq > 1]) == 0  # check whether all variables are unique
 
-        self.float_vars = float_vars
+        self.float_vars = list(float_vars)
         self.float_data = float_data
 
         if string_vars is None:
@@ -50,8 +48,12 @@ class PointCloud:
             assert string_data.ndim == 2
             assert string_data.shape[0] == float_data.shape[0]
             assert string_data.shape[1] == len(string_vars)
-            self.string_vars = string_vars
+            self.string_vars = list(string_vars)
             self.string_data = string_data
+
+        # check whether all variables are unique
+        total_vars = self.float_vars + self.string_vars
+        assert len(np.unique(total_vars)) == len(total_vars)
 
     @property
     def num_float_vars(self):
