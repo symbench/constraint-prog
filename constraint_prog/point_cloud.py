@@ -251,10 +251,11 @@ class PointCloud:
         assert len(tolerances) == magnitudes.num_float_vars
         assert self.num_points == magnitudes.num_points
         sel = magnitudes.float_data.abs() <= torch.tensor(tolerances, device=self.device)
+        sel = sel.all(dim=1)
         return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[sel.all(dim=1)],
+                          float_data=self.float_data[sel],
                           string_vars=self.string_vars,
-                          string_data=self.string_data[sel.all(dim=1)])
+                          string_data=self.string_data[sel])
 
     def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
         """
@@ -289,9 +290,9 @@ class PointCloud:
             selected[idx] = not (test3 or test4)
 
         return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[selected, :],
+                          float_data=self.float_data[selected],
                           string_vars=self.string_vars,
-                          string_data=self.string_data[selected, :])
+                          string_data=self.string_data[selected])
 
     def get_pareto_distance(self, directions: List[float],
                             points: torch.Tensor) -> torch.Tensor:
@@ -357,12 +358,13 @@ class PointCloud:
         variables. The elements of the variables list must be names of the
         variables for which the projection is applied.
         """
-        float_vars = [self.float_vars[self.float_vars.index(var)]
+        float_data = [self.float_data[:, self.float_vars.index(var)]
                       for var in variables]
-        float_data = [self.float_data[:, idx] for idx in variables]
         float_data = torch.stack(float_data, dim=1)
-        return PointCloud(float_vars=float_vars,
-                          float_data=float_data)
+        return PointCloud(float_vars=variables,
+                          float_data=float_data,
+                          string_vars=self.string_vars,
+                          string_data=self.string_data)
 
     def plot2d(self, idx1: int, idx2: int, point_size: float = 5.0):
         """
@@ -392,6 +394,7 @@ if __name__ == '__main__':
         points.print_info()
 
     points = PointCloud.load(filename='elliptic_curve.npz')
+    points = points.projection(["x", "y"])
     # points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
     points.print_info()
 
