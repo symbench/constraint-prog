@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2021, Miklos Maroti
+# Copyright (C) 2021, Miklos Maroti, Zsolt Vizi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -36,12 +36,24 @@ class PointCloud:
         """
         assert float_data.ndim == 2
         assert float_data.shape[1] == len(float_vars)
-        self.float_vars = float_vars
+
+        self.float_vars = list(float_vars)
         self.float_data = float_data
 
         if string_vars is None:
+            assert string_data is None
             self.string_vars = []
             self.string_data = np.empty(shape=(float_data.shape[0], 0), dtype=str)
+        else:
+            assert string_data.ndim == 2
+            assert string_data.shape[0] == float_data.shape[0]
+            assert string_data.shape[1] == len(string_vars)
+            self.string_vars = list(string_vars)
+            self.string_data = string_data
+
+        # check whether all variables are unique
+        total_vars = self.float_vars + self.string_vars
+        assert len(np.unique(total_vars)) == len(total_vars)
 
     @property
     def num_float_vars(self):
@@ -53,6 +65,7 @@ class PointCloud:
 
     @property
     def num_points(self):
+        assert self.string_data.shape[0] == self.float_data.shape[0]
         return self.float_data.shape[0]
 
     @property
@@ -60,10 +73,10 @@ class PointCloud:
         return self.float_data.device
 
     def print_info(self):
-        print("float shape: {}".format(list(self.float_data.shape)))
-        print("float names: {}".format(', '.join(self.float_vars)))
-        print("string shape: {}".format(list(self.string_data.shape)))
-        print("string names: {}".format(', '.join(self.string_vars)))
+        print("float shape: {}, string shape: {}".format(
+            list(self.float_data.shape), list(self.string_data.shape)))
+        print("float names: {}, string names: {}".format(
+            ', '.join(self.float_vars), ', '.join(self.string_vars)))
 
     def save(self, filename: str):
         """
@@ -74,12 +87,22 @@ class PointCloud:
         if ext == ".csv":
             with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(self.float_vars)
-                writer.writerows(self.float_data.numpy())
+
+                header = []
+                header.extend(self.float_vars)
+                header.extend(self.string_vars)
+                data = np.append(self.float_data.detach().float().cpu().numpy(),
+                                 self.string_data,
+                                 axis=1)
+
+                writer.writerow(header)
+                writer.writerows(data)
         elif ext == ".npz":
-            np.savez_compressed(filename,
-                                sample_vars=np.array(self.float_vars),
-                                sample_data=self.float_data.detach().float().cpu().numpy())
+            np.savez_compressed(file=filename,
+                                float_vars=self.float_vars,
+                                float_data=self.float_data.detach().float().cpu().numpy(),
+                                string_vars=self.string_vars,
+                                string_data=self.string_data)
         else:
             raise ValueError("invalid filename extension")
 
@@ -90,16 +113,45 @@ class PointCloud:
         """
         ext = os.path.splitext(filename)[1]
         if ext == ".csv":
-            data = np.genfromtxt(filename, delimiter=',', dtype=np.float32, names=True)
-            float_vars = list(data.dtype.names)
-            float_data = data.view(dtype=np.float32).reshape((-1, len(float_vars)))
-            return PointCloud(float_vars, torch.tensor(float_data))
+            data = np.loadtxt(fname=filename, delimiter=',', dtype=str)
+
+            string_vars, string_data, float_vars, float_data = [], [], [], []
+            for header, col in zip(data[0, :], data[1:, :].T):
+                try:
+                    float_data.append(col.astype(np.float32))
+                    float_vars.append(header)
+                except ValueError:
+                    string_data.append(col)
+                    string_vars.append(header)
+            float_data = torch.tensor(np.array(float_data).T)
+
+            if len(string_vars) < 1:
+                string_vars, string_data = None, None
+            else:
+                string_data = np.array(string_data)
+
+            return PointCloud(float_vars=float_vars,
+                              float_data=float_data,
+                              string_vars=string_vars,
+                              string_data=string_data)
         elif ext == ".npz":
-            data = np.load(filename, allow_pickle=False)
-            # TODO: use float_vars but make it backwards compatible
-            float_vars = list(data["sample_vars"])
-            float_data = torch.tensor(data["sample_data"], dtype=torch.float32)
-            return PointCloud(float_vars, float_data)
+            data = np.load(file=filename, allow_pickle=False)
+
+            # Enable backwards compatibility for data files of previous version
+            if "sample_vars" in data.files:
+                float_vars = list(data["sample_vars"])
+                float_data = torch.tensor(data["sample_data"], dtype=torch.float32)
+                string_vars, string_data = None, None
+            else:
+                float_vars = list(data["float_vars"])
+                float_data = torch.tensor(data["float_data"], dtype=torch.float32)
+                string_vars = list(data["string_vars"])
+                string_data = data["string_data"]
+
+            return PointCloud(float_vars=float_vars,
+                              float_data=float_data,
+                              string_vars=string_vars,
+                              string_data=string_data)
         else:
             raise ValueError("invalid filename extension")
 
@@ -119,7 +171,8 @@ class PointCloud:
         float_data = torch.rand(size=(num_points, len(float_vars)),
                                 device=device)
         float_data = float_data * (maximums - minimums) + minimums
-        return PointCloud(float_vars, float_data)
+        return PointCloud(float_vars=float_vars,
+                          float_data=float_data)
 
     def to_device(self, device="cpu"):
         """
@@ -164,7 +217,10 @@ class PointCloud:
                 selected[idx] = True
 
         float_data = float_data[selected].to(self.device)
-        return PointCloud(self.float_vars, float_data)
+        return PointCloud(float_vars=self.float_vars,
+                          float_data=float_data,
+                          string_vars=self.string_vars,
+                          string_data=self.string_data[selected])
 
     def prune_bounding_box(self, minimums: List[float], maximums: List[float]) -> 'PointCloud':
         """
@@ -179,7 +235,10 @@ class PointCloud:
         sel2 = self.float_data <= torch.tensor(maximums, device=self.device)
         sel3 = torch.logical_and(sel1, sel2).all(dim=1)
 
-        return PointCloud(self.float_vars, self.float_data[sel3])
+        return PointCloud(float_vars=self.float_vars,
+                          float_data=self.float_data[sel3],
+                          string_vars=self.string_vars,
+                          string_data=self.string_data[sel3])
 
     def prune_by_tolerances(self, magnitudes: 'PointCloud',
                             tolerances: List[float]) -> 'PointCloud':
@@ -189,10 +248,14 @@ class PointCloud:
         the number of variables of magnitudes, and the the number of points
         of magniteds must match that of this point cloud.
         """
-        assert len(tolerances) == magnitudes.num_vars
+        assert len(tolerances) == magnitudes.num_float_vars
         assert self.num_points == magnitudes.num_points
         sel = magnitudes.float_data.abs() <= torch.tensor(tolerances, device=self.device)
-        return PointCloud(self.float_vars, self.float_data[sel.all(dim=1)])
+        sel = sel.all(dim=1)
+        return PointCloud(float_vars=self.float_vars,
+                          float_data=self.float_data[sel],
+                          string_vars=self.string_vars,
+                          string_data=self.string_data[sel])
 
     def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
         """
@@ -226,7 +289,10 @@ class PointCloud:
             test4 = (float_data[idx + 1:, :] <= float_data[idx]).all(dim=1).any().item()
             selected[idx] = not (test3 or test4)
 
-        return PointCloud(self.float_vars, self.float_data[selected, :])
+        return PointCloud(float_vars=self.float_vars,
+                          float_data=self.float_data[selected],
+                          string_vars=self.string_vars,
+                          string_data=self.string_data[selected])
 
     def get_pareto_distance(self, directions: List[float],
                             points: torch.Tensor) -> torch.Tensor:
@@ -281,18 +347,24 @@ class PointCloud:
             input_data.append(self.float_data[:, idx])
         input_data = torch.stack(input_data, dim=1)
 
-        return PointCloud(variables, func(input_data))
+        return PointCloud(float_vars=variables,
+                          float_data=func(input_data),
+                          string_vars=self.string_vars,
+                          string_data=self.string_data)
 
-    def projection(self, variables: List[int]) -> 'PointCloud':
+    def projection(self, variables: List[str]) -> 'PointCloud':
         """
         Returns the projection of this point cloud to the specified set of
-        variables. The elements of the variables list must be between 0
-        and num_vars - 1.
+        variables. The elements of the variables list must be names of the
+        variables for which the projection is applied.
         """
-        float_vars = [self.float_vars[idx] for idx in variables]
-        float_data = [self.float_data[:, idx] for idx in variables]
+        float_data = [self.float_data[:, self.float_vars.index(var)]
+                      for var in variables]
         float_data = torch.stack(float_data, dim=1)
-        return PointCloud(float_vars, float_data)
+        return PointCloud(float_vars=variables,
+                          float_data=float_data,
+                          string_vars=self.string_vars,
+                          string_data=self.string_data)
 
     def plot2d(self, idx1: int, idx2: int, point_size: float = 5.0):
         """
@@ -311,33 +383,38 @@ class PointCloud:
 
 if __name__ == '__main__':
     if False:
-        points = PointCloud.load('elliptic_curve.npz')
+        points = PointCloud.load(filename='elliptic_curve.npz')
         points.print_info()
         points.plot2d(0, 1)
-        points = points.prune_close_points([0.1, 0.0, 0.1], keep=10)
+        points = points.prune_close_points(resolutions=[0.1, 0.0, 0.1],
+                                           keep=10)
         points.print_info()
-        points = points.prune_bounding_box([-1, -1, -1], [1, 2, 3])
+        points = points.prune_bounding_box(minimums=[-1, -1, -1],
+                                           maximums=[1, 2, 3])
         points.print_info()
-    points = PointCloud.load('elliptic_curve.npz')
+
+    points = PointCloud.load(filename='elliptic_curve.npz')
+    points = points.projection(["x", "y"])
     # points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
     points.print_info()
 
-    points2 = PointCloud(points.float_vars, points.float_data)
+    points2 = PointCloud(float_vars=points.float_vars,
+                         float_data=points.float_data)
 
     x = sympy.Symbol("x")
     y = sympy.Symbol("y")
-    points = points.evaluate(["x", "y"], [x, y])
+    points = points.evaluate(variables=["x", "y"],
+                             expressions=[x, y])
     # points.print_info()
-    points = points.prune_pareto_front([-1.0, -1.0])
+    points = points.prune_pareto_front(directions=[-1.0, -1.0])
     points.print_info()
     points.plot2d(0, 1)
 
     xpos = torch.linspace(-2.0, 2.0, 50)
     ypos = torch.linspace(-2.0, 0.0, 50)
     mesh = torch.stack(torch.meshgrid(xpos, ypos), dim=-1)
-    dist = points.get_pareto_distance([-1, -1], mesh)
+    dist = points.get_pareto_distance(directions=[-1, -1], points=mesh)
 
-    print(mesh.shape, dist.shape)
     fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
     ax1.plot_surface(
         mesh[:, :, 0].numpy(),

@@ -90,7 +90,7 @@ class Explorer:
         Runs exploration w.r.t. the given constraints
         """
         # Generate sample points
-        sample_data = PointCloud.generate(sample_vars=self.func.input_names,
+        sample_data = PointCloud.generate(float_vars=self.func.input_names,
                                           minimums=self.constraints_min,
                                           maximums=self.constraints_max,
                                           num_points=self.max_points)
@@ -140,7 +140,7 @@ class Explorer:
         :param PointCloud samples: generated sample for the exploration
         :return PointCloud: output of the iterative solver
         """
-        input_data = samples.sample_data.to(self.device)
+        input_data = samples.float_data.to(self.device)
         output_data = None
         if self.method == "newton":
             bounding_box = torch.cat(
@@ -159,8 +159,8 @@ class Explorer:
                                            lrate=self.gradient_lr,
                                            device=self.device)
 
-        return PointCloud(sample_vars=self.func.input_names,
-                          sample_data=output_data)
+        return PointCloud(float_vars=self.func.input_names,
+                          float_data=output_data)
 
     def extend_output_data(self, output_data: PointCloud) -> PointCloud:
         """
@@ -169,18 +169,18 @@ class Explorer:
         :return PointCloud: extended output data
         """
         # Append fixed values to samples
-        samples = output_data.sample_data
-        sample_vars = deepcopy(self.func.input_names)
-        sample_vars.extend(list(self.fixed_values.keys()))
-        sample_vars.extend(list(self.expressions.keys()))
-        sample_data = samples.detach().cpu().numpy()
+        samples = output_data.float_data
+        float_vars = deepcopy(self.func.input_names)
+        float_vars.extend(list(self.fixed_values.keys()))
+        float_vars.extend(list(self.expressions.keys()))
+        float_data = samples.detach().cpu().numpy()
         columns_fixed_values = np.repeat(
             np.array([list(self.fixed_values.values())]),
-            sample_data.shape[0],
+            float_data.shape[0],
             axis=0
         )
-        sample_data = np.concatenate(
-            (sample_data, columns_fixed_values), axis=1
+        float_data = np.concatenate(
+            (float_data, columns_fixed_values), axis=1
         )
         for name, expr in self.expressions.items():
             try:
@@ -188,9 +188,9 @@ class Explorer:
                     [expr], samples, equs_as_float=False).detach().cpu().numpy()
             except ValueError as err:
                 raise Exception("Expression " + name + " cannot be evaluated: " + str(err))
-            sample_data = np.concatenate((sample_data, columns_expressions), axis=1)
-        return PointCloud(sample_vars=sample_vars,
-                          sample_data=torch.tensor(sample_data, device=self.device))
+            float_data = np.concatenate((float_data, columns_expressions), axis=1)
+        return PointCloud(float_vars=float_vars,
+                          float_data=torch.tensor(float_data, device=self.device))
 
 
 def main(args=None):
