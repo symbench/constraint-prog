@@ -342,7 +342,9 @@ class PointCloud:
         input_data = torch.stack(input_data, dim=1)
 
         return PointCloud(float_vars=variables,
-                          float_data=func(input_data))
+                          float_data=func(input_data),
+                          string_vars=self.string_vars,
+                          string_data=self.string_data)
 
     def projection(self, variables: List[int]) -> 'PointCloud':
         """
