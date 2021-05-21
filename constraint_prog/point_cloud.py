@@ -212,7 +212,9 @@ class PointCloud:
 
         float_data = float_data[selected].to(self.device)
         return PointCloud(float_vars=self.float_vars,
-                          float_data=float_data)
+                          float_data=float_data,
+                          string_vars=self.string_vars,
+                          string_data=self.string_data)
 
     def prune_bounding_box(self, minimums: List[float], maximums: List[float]) -> 'PointCloud':
         """
@@ -228,7 +230,9 @@ class PointCloud:
         sel3 = torch.logical_and(sel1, sel2).all(dim=1)
 
         return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[sel3])
+                          float_data=self.float_data[sel3],
+                          string_vars=self.string_vars,
+                          string_data=self.string_data)
 
     def prune_by_tolerances(self, magnitudes: 'PointCloud',
                             tolerances: List[float]) -> 'PointCloud':
@@ -242,7 +246,9 @@ class PointCloud:
         assert self.num_points == magnitudes.num_points
         sel = magnitudes.float_data.abs() <= torch.tensor(tolerances, device=self.device)
         return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[sel.all(dim=1)])
+                          float_data=self.float_data[sel.all(dim=1)],
+                          string_vars=self.string_vars,
+                          string_data=self.string_data)
 
     def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
         """
@@ -277,7 +283,9 @@ class PointCloud:
             selected[idx] = not (test3 or test4)
 
         return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[selected, :])
+                          float_data=self.float_data[selected, :],
+                          string_vars=self.string_vars,
+                          string_data=self.string_data)
 
     def get_pareto_distance(self, directions: List[float],
                             points: torch.Tensor) -> torch.Tensor:
