@@ -21,369 +21,31 @@ from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
-import sympy
 import torch
+from torch.autograd import Variable
+import torch.nn.functional as F
+import torch.utils.data as Data
 
-from constraint_prog.sympy_func import SympyFunc
+from constraint_prog.point_cloud import PointCloud
 
+class Net(torch.nn.Module):
+    def __init__(self, n_feature, n_hidden, n_output):
+        super(Net, self).__init__()
+        self.hidden = torch.nn.Linear(n_feature, n_hidden)   # hidden layer
+        self.hidden2 = torch.nn.Linear(n_hidden, n_hidden)   # hidden layer
+        self.hidden3 = torch.nn.Linear(n_hidden, n_hidden)   # hidden layer
+        self.predict = torch.nn.Linear(n_hidden, n_output)   # output layer
 
-class PointCloud:
-    def __init__(self, float_vars: List[str], float_data: torch.Tensor,
-                 string_vars: List[str] = None, string_data: np.ndarray = None):
-        """
-        Creates a point cloud with num_vars many named coordinates.
-        The shape of the float_data must be [num_points, num_vars].
-        """
-        assert float_data.ndim == 2
-        assert float_data.shape[1] == len(float_vars)
-
-        self.float_vars = list(float_vars)
-        self.float_data = float_data
-
-        if string_vars is None:
-            assert string_data is None
-            self.string_vars = []
-            self.string_data = np.empty(shape=(float_data.shape[0], 0), dtype=str)
-        else:
-            assert string_data.ndim == 2
-            assert string_data.shape[0] == float_data.shape[0]
-            assert string_data.shape[1] == len(string_vars)
-            self.string_vars = list(string_vars)
-            self.string_data = string_data
-
-        # check whether all variables are unique
-        total_vars = self.float_vars + self.string_vars
-        assert len(np.unique(total_vars)) == len(total_vars)
-
-    @property
-    def num_float_vars(self):
-        return len(self.float_vars)
-
-    @property
-    def num_string_vars(self):
-        return len(self.string_vars)
-
-    @property
-    def num_points(self):
-        assert self.string_data.shape[0] == self.float_data.shape[0]
-        return self.float_data.shape[0]
-
-    @property
-    def device(self):
-        return self.float_data.device
-
-    def print_info(self):
-        print("float shape: {}, string shape: {}".format(
-            list(self.float_data.shape), list(self.string_data.shape)))
-        print("float names: {}, string names: {}".format(
-            ', '.join(self.float_vars), ', '.join(self.string_vars)))
-
-    def save(self, filename: str):
-        """
-        Saves this point cloud to the given filename. The filename extension
-        must be either csv or npz.
-        """
-        ext = os.path.splitext(filename)[1]
-        if ext == ".csv":
-            with open(filename, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-
-                header = []
-                header.extend(self.float_vars)
-                header.extend(self.string_vars)
-                data = np.append(self.float_data.detach().float().cpu().numpy(),
-                                 self.string_data,
-                                 axis=1)
-
-                writer.writerow(header)
-                writer.writerows(data)
-        elif ext == ".npz":
-            np.savez_compressed(file=filename,
-                                float_vars=self.float_vars,
-                                float_data=self.float_data.detach().float().cpu().numpy(),
-                                string_vars=self.string_vars,
-                                string_data=self.string_data)
-        else:
-            raise ValueError("invalid filename extension")
-
-    @staticmethod
-    def load(filename: str) -> 'PointCloud':
-        """
-        Loads the data from the given csv or npz file.
-        """
-        ext = os.path.splitext(filename)[1]
-        if ext == ".csv":
-            data = np.loadtxt(fname=filename, delimiter=';', dtype=str)
-
-            string_vars, string_data, float_vars, float_data = [], [], [], []
-            for header, col in zip(data[0, :], data[1:, :].T):
-                try:
-                    float_data.append(col.astype(np.float32))
-                    float_vars.append(header)
-                except ValueError:
-                    string_data.append(col)
-                    string_vars.append(header)
-            float_data = torch.tensor(np.array(float_data).T)
-
-            if len(string_vars) < 1:
-                string_vars, string_data = None, None
-            else:
-                string_data = np.array(string_data)
-
-            return PointCloud(float_vars=float_vars,
-                              float_data=float_data,
-                              string_vars=string_vars,
-                              string_data=string_data)
-        elif ext == ".npz":
-            data = np.load(file=filename, allow_pickle=False)
-
-            # Enable backwards compatibility for data files of previous version
-            if "sample_vars" in data.files:
-                float_vars = list(data["sample_vars"])
-                float_data = torch.tensor(data["sample_data"], dtype=torch.float32)
-                string_vars, string_data = None, None
-            else:
-                float_vars = list(data["float_vars"])
-                float_data = torch.tensor(data["float_data"], dtype=torch.float32)
-                string_vars = list(data["string_vars"])
-                string_data = data["string_data"]
-
-            return PointCloud(float_vars=float_vars,
-                              float_data=float_data,
-                              string_vars=string_vars,
-                              string_data=string_data)
-        else:
-            raise ValueError("invalid filename extension")
-
-    @staticmethod
-    def generate(float_vars: List[str],
-                 minimums: List[float], maximums: List[float],
-                 num_points: int, device='cpu') -> 'PointCloud':
-        """
-        Creates a new point cloud with the given number of points and
-        bounding box with uniform distribution.
-        """
-        assert len(float_vars) == len(minimums)
-        assert len(float_vars) == len(maximums)
-
-        minimums = torch.tensor(minimums, device=device)
-        maximums = torch.tensor(maximums, device=device)
-        float_data = torch.rand(size=(num_points, len(float_vars)),
-                                device=device)
-        float_data = float_data * (maximums - minimums) + minimums
-        return PointCloud(float_vars=float_vars,
-                          float_data=float_data)
-
-    def to_device(self, device="cpu"):
-        """
-        Moves the sample data to the given device.
-        """
-        self.float_data = self.float_data.to(device)
-
-    def prune_close_points(self, resolutions: List[float], keep=1) -> 'PointCloud':
-        """
-        Divides all variables with the given resolution and keeps at most keep
-        many elements from each small rectangle in a new point cloud. If a
-        resolution value is zero, then those variables do not participate in
-        the decisions, so basically we project down only to those variables
-        where the resolution is positive. The resolution list must be of shape
-        [num_vars].
-        """
-        assert keep >= 1 and len(resolutions) == self.num_float_vars
-
-        resolutions = torch.tensor(list(resolutions))
-        multiplier = resolutions.clamp(min=0.0)
-        indices = multiplier > 0.0
-        multiplier[indices] = 1.0 / multiplier[indices]
-        multiplier = multiplier.to(self.device)
-
-        rounded = (self.float_data * multiplier).round().type(torch.int64)
-        multiplier = None
-
-        # hash based filtering is not unique, but good enough
-        randcoef = torch.randint(-10000000, 10000000, (self.num_float_vars, ),
-                                 device=self.device)
-        hashnums = (rounded * randcoef).sum(dim=1).cpu()
-        rounded = None
-
-        # this is slow, but good enough
-        float_data = self.float_data.cpu()
-        selected = torch.zeros(float_data.shape[0]).bool()
-        counter = Counter()
-        for idx in range(float_data.shape[0]):
-            value = int(hashnums[idx])
-            if counter[value] < keep:
-                counter[value] += 1
-                selected[idx] = True
-
-        float_data = float_data[selected].to(self.device)
-        return PointCloud(float_vars=self.float_vars,
-                          float_data=float_data,
-                          string_vars=self.string_vars,
-                          string_data=self.string_data[selected])
-
-    def prune_bounding_box(self, minimums: List[float], maximums: List[float]) -> 'PointCloud':
-        """
-        Returns those points that lie in the specified bounding box in a new
-        point cloud. The shape of the minimums and maximums lists must be of
-        shape [num_vars]. If no bound is necessary, then use -inf or inf for
-        that value.
-        """
-        assert len(minimums) == self.num_float_vars and len(maximums) == self.num_float_vars
-
-        sel1 = self.float_data >= torch.tensor(minimums, device=self.device)
-        sel2 = self.float_data <= torch.tensor(maximums, device=self.device)
-        sel3 = torch.logical_and(sel1, sel2).all(dim=1)
-
-        return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[sel3],
-                          string_vars=self.string_vars,
-                          string_data=self.string_data[sel3])
-
-    def prune_by_tolerances(self, magnitudes: 'PointCloud',
-                            tolerances: List[float]) -> 'PointCloud':
-        """
-        Returns those points where the given magnitudes are smaller in absolute
-        value than the given tolerances. The length of tolerances must be
-        the number of variables of magnitudes, and the the number of points
-        of magniteds must match that of this point cloud.
-        """
-        assert len(tolerances) == magnitudes.num_float_vars
-        assert self.num_points == magnitudes.num_points
-        sel = magnitudes.float_data.abs() <= torch.tensor(tolerances, device=self.device)
-        sel = sel.all(dim=1)
-        return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[sel],
-                          string_vars=self.string_vars,
-                          string_data=self.string_data[sel])
-
-    def prune_pareto_front(self, directions: List[float]) -> 'PointCloud':
-        """
-        Removes all points that are dominated by a better solution on the Pareto
-        front. The directions list specifies the direction of each variables, and
-        must be of shape [num_vars]. If the direction is negative, then we prefer
-        a smaller value all other values being equal (e.g. price). If the direction
-        is positive, then we prefer a larger value (e.g. speed). If the direction
-        is zero, then that variable does not participate in the Pareto front
-        calculation, but their values are kept for selected points.
-        """
-        assert len(directions) == self.num_float_vars
-
-        # gather data for minimization in all coordinates
-        float_data = []
-        for idx in range(self.num_float_vars):
-            if directions[idx] == 0.0:
-                continue
-            else:
-                data = self.float_data[:, idx]
-                float_data.append(data if directions[idx] < 0.0 else -data)
-        assert float_data
-        float_data = torch.stack(float_data, dim=1)
-
-        # TODO: find a faster algorithm than this quadratic
-        selected = torch.ones(self.num_points, dtype=bool)
-        for idx in range(self.num_points):
-            test1 = (float_data[:idx, :] <= float_data[idx]).all(dim=1)
-            test2 = (float_data[:idx, :] != float_data[idx]).any(dim=1)
-            test3 = torch.logical_and(test1, test2).any().item()
-            test4 = (float_data[idx + 1:, :] <= float_data[idx]).all(dim=1).any().item()
-            selected[idx] = not (test3 or test4)
-
-        return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[selected],
-                          string_vars=self.string_vars,
-                          string_data=self.string_data[selected])
-
-    def get_pareto_distance(self, directions: List[float],
-                            points: torch.Tensor) -> torch.Tensor:
-        """
-        Calculates the distance of the given points to the pareto front. The
-        shape of the points tensor must be [*,num_vars], and the returned
-        tensor is of shape [*]. The returned distances is zero in the dominated
-        (feasible) region, and positive in the non-dominated region. The meaning
-        of the directions is exactly as in the prune_pareto_dominated method.
-        """
-        assert len(directions) == self.num_float_vars
-        assert points.shape[-1] == self.num_float_vars
-
-        # gather data for minimization in all coordinates
-        float_data = []
-        points2 = points.to(self.device).unbind(dim=-1)
-        points = []
-        for idx in range(self.num_float_vars):
-            if directions[idx] == 0.0:
-                continue
-            else:
-                data = self.float_data[:, idx]
-                float_data.append(data if directions[idx] < 0.0 else -data)
-                data = points2[idx]
-                points.append(data if directions[idx] < 0.0 else -data)
-        assert float_data
-        float_data = torch.stack(float_data, dim=1)
-        points = torch.stack(points, dim=-1)
-
-        # calculate minimal distance
-        points = points.reshape(points.shape[:-1] + (1, points.shape[-1]))
-        float_data = (float_data - points).clamp(min=0.0)
-        float_data = float_data.pow(2.0).sum(dim=-1).min(dim=-1).values
-        return float_data.sqrt()
-
-    def evaluate(self, variables: List[str],
-                 expressions: List[sympy.Expr]) -> 'PointCloud':
-        """
-        Evaluates the given list of expressions on the current points
-        and returns a new point cloud with these values. The length of
-        the variables list must match that of the expressions. The free
-        symbols of the expressions must be among the variables of this
-        point cloud.
-        """
-        assert len(variables) == len(expressions)
-        func = SympyFunc(expressions, device=self.device)
-        assert all(var in self.float_vars for var in func.input_names)
-
-        input_data = []
-        for var in func.input_names:
-            idx = self.float_vars.index(var)
-            input_data.append(self.float_data[:, idx])
-        input_data = torch.stack(input_data, dim=1)
-
-        return PointCloud(float_vars=variables,
-                          float_data=func(input_data),
-                          string_vars=self.string_vars,
-                          string_data=self.string_data)
-
-    def projection(self, variables: List[str]) -> 'PointCloud':
-        """
-        Returns the projection of this point cloud to the specified set of
-        variables. The elements of the variables list must be names of the
-        variables for which the projection is applied.
-        """
-        float_data = [self.float_data[:, self.float_vars.index(var)]
-                      for var in variables]
-        float_data = torch.stack(float_data, dim=1)
-        return PointCloud(float_vars=variables,
-                          float_data=float_data,
-                          string_vars=self.string_vars,
-                          string_data=self.string_data)
-
-    def plot2d(self, idx1: int, idx2: int, point_size: float = 5.0):
-        """
-        Plots the 2d projection of the point cloud to the given coordinates.
-        """
-        assert 0 <= idx1 < self.num_float_vars and 0 <= idx2 < self.num_float_vars
-        fig, ax1 = plt.subplots()
-        ax1.scatter(
-            self.float_data[:, idx1].numpy(),
-            self.float_data[:, idx2].numpy(),
-            s=point_size)
-        ax1.set_xlabel(self.float_vars[idx1])
-        ax1.set_ylabel(self.float_vars[idx2])
-        plt.show()
-
+    def forward(self, x):
+        x1 = F.relu(self.hidden(x))     # activation function for hidden layer
+        x2 = F.relu(self.hidden2(x1))
+        x3 = F.relu(self.hidden3(x2))
+        x = self.predict(x3)             # linear output
+        return x
 
 if __name__ == '__main__':
 
-    points = PointCloud.load(filename='..\\notebooks\\battery_packing.csv')
+    points = PointCloud.load(filename='..\\notebooks\\battery_packing.csv', delimiter=';')
     points = points.prune_pareto_front(directions=[-1, -1, 0, 0, 0, 0, 1, 0])
     points.print_info()
     points = points.projection(["hull_D", "hull_L", "total_CAP"])
@@ -391,8 +53,46 @@ if __name__ == '__main__':
 
     xpos = torch.linspace(0.0, 1.0, 50)
     ypos = torch.linspace(0.0, 1.0, 50)
-    cap = torch.linspace(1000.0, 1000.0, 50)
+    cap = torch.linspace(5000.0, 5000.0, 50)
     mesh = torch.stack(torch.meshgrid(xpos, ypos, cap), dim=-1) #50,50,50,3
+
+    # dist = points.get_pareto_distance(directions=[-1, -1, 1], points=mesh) #50,50,50
+    # fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
+    # ax1.plot_surface(
+    #     mesh[:, :, 1, 0].numpy(),
+    #     mesh[:, :, 1, 1].numpy(),
+    #     dist[:,:,40].numpy())
+    # plt.show()
+
+    net = Net(n_feature=3, n_hidden=100, n_output=1)  # define the network
+    net.double()
+    # print(net)  # net architecture
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(net.parameters())
+    loss_func = torch.nn.MSELoss()
+
+    EPOCH = 1000000
+
+    # start training
+    for epoch in range(EPOCH):
+        d_r = 2.0*np.random.rand()
+        l_r = 2.0*np.random.rand()
+        cap_r = np.random.uniform(0,10000)
+        input = Variable(torch.tensor(np.array([d_r,l_r,cap_r])))
+        input2 = Variable(torch.tensor(np.array([d_r, l_r, cap_r/1000])))
+        output = Variable(torch.tensor(np.array([points.get_pareto_distance(directions=[-1, -1, 1], points=input)])))
+        prediction = net(input2)  # input x and predict based on x
+        #prediction = torch.maximum(prediction, torch.tensor(0.0))
+
+        loss = loss_func(prediction, output)  # must be (1. nn output, 2. target)
+
+        optimizer.zero_grad()  # clear gradients for next train
+        loss.backward()  # backpropagation, compute gradients
+        optimizer.step()  # apply gradients
+
+        if epoch % (EPOCH//10) == 0:
+            print(loss)
+
 
     dist = points.get_pareto_distance(directions=[-1, -1, 1], points=mesh) #50,50,50
     fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
@@ -401,3 +101,18 @@ if __name__ == '__main__':
         mesh[:, :, 1, 1].numpy(),
         dist[:,:,40].numpy())
     plt.show()
+
+    predicted_surface = np.zeros_like(dist)
+    for i in range(mesh.numpy().shape[0]):
+        for j in range(mesh.numpy().shape[1]):
+            input = Variable(torch.tensor(np.array([mesh[i, j, 1, 0].numpy(),mesh[i, j, 1, 1].numpy(),5.0])))
+            prediction = net(input)
+            predicted_surface[i,j,0] = prediction
+
+    fig, ax2 = plt.subplots(subplot_kw={"projection": "3d"})
+    ax2.plot_surface(
+        mesh[:, :, 1, 0].numpy(),
+        mesh[:, :, 1, 1].numpy(),
+        predicted_surface[:,:,0])
+    plt.show()
+

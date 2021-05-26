@@ -107,13 +107,13 @@ class PointCloud:
             raise ValueError("invalid filename extension")
 
     @staticmethod
-    def load(filename: str) -> 'PointCloud':
+    def load(filename: str, delimiter=',') -> 'PointCloud':
         """
         Loads the data from the given csv or npz file.
         """
         ext = os.path.splitext(filename)[1]
         if ext == ".csv":
-            data = np.loadtxt(fname=filename, delimiter=',', dtype=str)
+            data = np.loadtxt(fname=filename, delimiter=delimiter, dtype=str)
 
             string_vars, string_data, float_vars, float_data = [], [], [], []
             for header, col in zip(data[0, :], data[1:, :].T):
