@@ -22,9 +22,12 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from numpy.distutils.lib2def import output_def
 from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.utils.data as Data
+import os
+import sys
 
 from constraint_prog.point_cloud import PointCloud
 
@@ -37,15 +40,15 @@ class Net(torch.nn.Module):
         self.predict = torch.nn.Linear(n_hidden, n_output)   # output layer
 
     def forward(self, x):
-        x1 = F.relu(self.hidden(x))     # activation function for hidden layer
-        x2 = F.relu(self.hidden2(x1))
-        x3 = F.relu(self.hidden3(x2))
+        x1 = torch.tanh(self.hidden(x))     # activation function for hidden layer
+        x2 = torch.tanh(self.hidden2(x1))
+        x3 = torch.tanh(self.hidden3(x2))
         x = self.predict(x3)             # linear output
         return x
 
 if __name__ == '__main__':
 
-    points = PointCloud.load(filename='..\\notebooks\\battery_packing.csv', delimiter=';')
+    points = PointCloud.load(filename=os.path.join('..', 'notebooks', 'battery_packing.csv'), delimiter=';')
     points = points.prune_pareto_front(directions=[-1, -1, 0, 0, 0, 0, 1, 0])
     points.print_info()
     points = points.projection(["hull_D", "hull_L", "total_CAP"])
@@ -56,41 +59,63 @@ if __name__ == '__main__':
     cap = torch.linspace(5000.0, 5000.0, 50)
     mesh = torch.stack(torch.meshgrid(xpos, ypos, cap), dim=-1) #50,50,50,3
 
-    # dist = points.get_pareto_distance(directions=[-1, -1, 1], points=mesh) #50,50,50
-    # fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
-    # ax1.plot_surface(
-    #     mesh[:, :, 1, 0].numpy(),
-    #     mesh[:, :, 1, 1].numpy(),
-    #     dist[:,:,40].numpy())
-    # plt.show()
+    net = torch.nn.Sequential(
+        torch.nn.Linear(3, 20),
+        torch.nn.Sigmoid(),
+        torch.nn.Linear(20, 10),
+        torch.nn.Sigmoid(),
+        torch.nn.Linear(10, 1),
+    )
 
-    net = Net(n_feature=3, n_hidden=100, n_output=1)  # define the network
+    #net = Net(n_feature=3, n_hidden=100, n_output=1)  # define the network
     net.double()
-    # print(net)  # net architecture
+    print(net)  # net architecture
     optimizer = torch.optim.SGD(net.parameters(), lr=0.001)
-    optimizer = torch.optim.Adam(net.parameters())
+    #optimizer = torch.optim.Adam(net.parameters())
     loss_func = torch.nn.MSELoss()
 
-    EPOCH = 1000000
+    if(len(sys.argv)>1):
+        EPOCH = int(sys.argv[1])
+        BATCH_SIZE = int(sys.argv[2])
+        N = int(sys.argv[3])
+    else:
+        EPOCH = 100
+        BATCH_SIZE = 128
+        N = BATCH_SIZE*10
+
+    d_r = np.random.rand(N)
+    l_r = np.random.rand(N)
+    cap_r = np.random.uniform(0, 10000, N)
+    input = Variable(torch.tensor(np.array([d_r, l_r, cap_r]).T))
+    input2 = Variable(torch.tensor(np.array([d_r, l_r, cap_r / 1000]).T))
+    output = points.get_pareto_distance(directions=[-1, -1, 1], points=input)
+    output = torch.unsqueeze(output, 1)
+    output = Variable(output)
+
+    torch_dataset = torch.utils.data.TensorDataset(input2, output)
+
+    loader = Data.DataLoader(
+        dataset=torch_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True, num_workers=2, )
 
     # start training
     for epoch in range(EPOCH):
-        d_r = 2.0*np.random.rand()
-        l_r = 2.0*np.random.rand()
-        cap_r = np.random.uniform(0,10000)
-        input = Variable(torch.tensor(np.array([d_r,l_r,cap_r])))
-        input2 = Variable(torch.tensor(np.array([d_r, l_r, cap_r/1000])))
-        output = Variable(torch.tensor(np.array([points.get_pareto_distance(directions=[-1, -1, 1], points=input)])))
-        prediction = net(input2)  # input x and predict based on x
-        #prediction = torch.maximum(prediction, torch.tensor(0.0))
+        for step, (batch_x, batch_y) in enumerate(loader):  # for each training step
 
-        loss = loss_func(prediction, output)  # must be (1. nn output, 2. target)
+            b_x = Variable(batch_x)
+            b_y = Variable(batch_y)
 
-        optimizer.zero_grad()  # clear gradients for next train
-        loss.backward()  # backpropagation, compute gradients
-        optimizer.step()  # apply gradients
+            prediction = net(b_x)  # input x and predict based on x
+            # prediction = torch.maximum(prediction, torch.tensor(0.0))
 
-        if epoch % (EPOCH//10) == 0:
+            loss = loss_func(prediction, b_y)  # must be (1. nn output, 2. target)
+
+            optimizer.zero_grad()  # clear gradients for next train
+            loss.backward()  # backpropagation, compute gradients
+            optimizer.step()  # apply gradients
+
+        if epoch % 10 == 0:
             print(loss)
 
 
