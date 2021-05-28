@@ -60,18 +60,20 @@ if __name__ == '__main__':
     mesh = torch.stack(torch.meshgrid(xpos, ypos, cap), dim=-1) #50,50,50,3
 
     net = torch.nn.Sequential(
-        torch.nn.Linear(3, 20),
+        torch.nn.Linear(3, 100),
+        torch.nn.ReLU(),
+        torch.nn.Linear(100, 300),
         torch.nn.Sigmoid(),
-        torch.nn.Linear(20, 10),
+        torch.nn.Linear(300, 20),
         torch.nn.Sigmoid(),
-        torch.nn.Linear(10, 1),
+        torch.nn.Linear(20, 1),
     )
 
     #net = Net(n_feature=3, n_hidden=100, n_output=1)  # define the network
     net.double()
     print(net)  # net architecture
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.001)
-    #optimizer = torch.optim.Adam(net.parameters())
+    #optimizer = torch.optim.SGD(net.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.0005)
     loss_func = torch.nn.MSELoss()
 
     if(len(sys.argv)>1):
@@ -85,7 +87,7 @@ if __name__ == '__main__':
 
     d_r = np.random.rand(N)
     l_r = np.random.rand(N)
-    cap_r = np.random.uniform(0, 10000, N)
+    cap_r = np.random.uniform(0, 5000, N)
     input = Variable(torch.tensor(np.array([d_r, l_r, cap_r]).T))
     input2 = Variable(torch.tensor(np.array([d_r, l_r, cap_r / 1000]).T))
     output = points.get_pareto_distance(directions=[-1, -1, 1], points=input)
@@ -107,7 +109,7 @@ if __name__ == '__main__':
             b_y = Variable(batch_y)
 
             prediction = net(b_x)  # input x and predict based on x
-            # prediction = torch.maximum(prediction, torch.tensor(0.0))
+            #prediction = torch.maximum(prediction, torch.tensor(0.0))
 
             loss = loss_func(prediction, b_y)  # must be (1. nn output, 2. target)
 
@@ -118,6 +120,7 @@ if __name__ == '__main__':
         if epoch % 10 == 0:
             print(loss)
 
+    torch.save(net, "net.pt")
 
     dist = points.get_pareto_distance(directions=[-1, -1, 1], points=mesh) #50,50,50
     fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
@@ -125,6 +128,22 @@ if __name__ == '__main__':
         mesh[:, :, 1, 0].numpy(),
         mesh[:, :, 1, 1].numpy(),
         dist[:,:,40].numpy())
+    plt.savefig("o1.pdf", bbox_inches='tight')
+    plt.show()
+
+    predicted_surface = np.zeros_like(dist)
+    for i in range(mesh.numpy().shape[0]):
+        for j in range(mesh.numpy().shape[1]):
+            input = Variable(torch.tensor(np.array([mesh[i, j, 1, 0].numpy(),mesh[i, j, 1, 1].numpy(),2.0])))
+            prediction = net(input)
+            predicted_surface[i,j,0] = prediction
+
+    fig, ax2 = plt.subplots(subplot_kw={"projection": "3d"})
+    ax2.plot_surface(
+        mesh[:, :, 1, 0].numpy(),
+        mesh[:, :, 1, 1].numpy(),
+        predicted_surface[:,:,0])
+    plt.savefig("o2.pdf", bbox_inches='tight')
     plt.show()
 
     predicted_surface = np.zeros_like(dist)
@@ -134,10 +153,11 @@ if __name__ == '__main__':
             prediction = net(input)
             predicted_surface[i,j,0] = prediction
 
-    fig, ax2 = plt.subplots(subplot_kw={"projection": "3d"})
-    ax2.plot_surface(
+    fig, ax3 = plt.subplots(subplot_kw={"projection": "3d"})
+    ax3.plot_surface(
         mesh[:, :, 1, 0].numpy(),
         mesh[:, :, 1, 1].numpy(),
         predicted_surface[:,:,0])
+    plt.savefig("o3.pdf", bbox_inches='tight')
     plt.show()
 
