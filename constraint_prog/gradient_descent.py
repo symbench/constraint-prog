@@ -26,6 +26,7 @@ class TorchStandardScaler:
     def __init__(self):
         self.mean = None
         self.std = None
+        self.is_scalable = False
 
     def fit(self, x: torch.Tensor) -> None:
         """
@@ -35,6 +36,7 @@ class TorchStandardScaler:
         """
         self.mean = x.mean(0, keepdim=True)
         self.std = x.std(0, unbiased=False, keepdim=True)
+        self.is_scalable = x.shape[0] > 2
 
     def transform(self, x: torch.Tensor) -> None:
         """
@@ -42,8 +44,9 @@ class TorchStandardScaler:
         :param x: torch.Tensor data to standardize
         :return: None
         """
-        x -= self.mean
-        x /= (self.std + 1e-7)
+        if self.is_scalable:
+            x -= self.mean
+            x /= (self.std + 1e-7)
 
     def rescale(self, x: torch.Tensor) -> None:
         """
@@ -52,8 +55,9 @@ class TorchStandardScaler:
         :param x: torch.Tensor data to standardize
         :return: None
         """
-        x = x * (self.std + 1e-7)
-        x = x + self.mean
+        if self.is_scalable:
+            x = x * (self.std + 1e-7)
+            x = x + self.mean
 
 
 def gradient_descent(f: Callable, in_data: torch.Tensor, it: int,

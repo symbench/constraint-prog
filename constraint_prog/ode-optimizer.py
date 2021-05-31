@@ -65,11 +65,12 @@ class ODEOptimizer:
 
 def main():
     from constraint_prog.gradient_descent import gradient_descent
+    from constraint_prog.newton_raphson import newton_raphson
 
     def func(x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
         return torch.stack(
-            tensors=[-3 * x[:, 0] + u[:, 0],
-                     2 * x[:, 1] + u[:, 1]],
+            tensors=[-3 * x[:, 1] + u[:, 0],
+                     2 * x[:, 0] + u[:, 1]],
             dim=-1
         )
 
@@ -84,7 +85,8 @@ def main():
                            dt=dt, device=device)
     coeff = torch.randn(size=(1, (4 * fourier_order + 2) * x_0.shape[0]), device=device)
 
-    output = gradient_descent(f=ode_opt.run, in_data=coeff, lrate=0.001, it=10000, device=device)
+    # output = gradient_descent(f=ode_opt.run, in_data=coeff, lrate=0.001, it=10000, device=device)
+    output = newton_raphson(func=ode_opt.run, input_data=coeff)
     coeff = output.view((4 * fourier_order + 2, x_0.shape[0]))
     x_t = ode_opt.fourier(coeff=coeff[:2 * fourier_order + 1, :]).detach().numpy()
     plt.plot(x_t[0], x_t[1])
