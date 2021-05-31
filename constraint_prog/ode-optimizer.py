@@ -45,7 +45,7 @@ class ODEOptimizer:
         for idx in range(coeff_.shape[1]):
             dx_dt_list.append(torch.autograd.grad(inputs=self.t,
                                                   outputs=x_t[:, idx],
-                                                  grad_outputs=torch.ones(self.t.shape[0]),
+                                                  grad_outputs=torch.ones(self.t.shape[0], device=self.device),
                                                   retain_graph=True
                                                   )[0]
                               )
@@ -57,11 +57,16 @@ class ODEOptimizer:
         ).unsqueeze(dim=0)
 
     def fourier(self, coeff: torch.Tensor) -> torch.Tensor:
-        result = 0.0 * torch.zeros(size=(self.t.shape[0], coeff.shape[1]))
-        result = result + torch.ones_like(input=result) * coeff[0, :]
+        result = 0.0 * torch.zeros(size=(self.t.shape[0], coeff.shape[1]),
+                                   device=self.device)
+        result = result + torch.ones_like(input=result, device=self.device) * coeff[0, :]
         for j in range(1, self.fourier_order):
-            result = result + torch.cos(input=j * self.t) * torch.ones(coeff.shape[1]) * coeff[2 * j - 1, :]
-            result = result + torch.sin(input=j * self.t) * torch.ones(coeff.shape[1]) * coeff[2 * j, :]
+            result = result + torch.cos(input=j * self.t) * \
+                torch.ones(coeff.shape[1], device=self.device) * \
+                coeff[2 * j - 1, :]
+            result = result + torch.sin(input=j * self.t) * \
+                torch.ones(coeff.shape[1], device=self.device) * \
+                coeff[2 * j, :]
 
         return result
 
@@ -77,22 +82,23 @@ def main():
             dim=-1
         )
 
+    device = torch.device('cuda:0')
+
     u_dim = 2
     fourier_order = 5
     t_0, t_1 = 0.0, 4.0
-    x_0 = torch.tensor(data=[1.0, 1.0])
-    x_1 = torch.tensor(data=[-1.17613, 4.21177])
+    x_0 = torch.tensor(data=[1.0, 1.0], device=device)
+    x_1 = torch.tensor(data=[-1.17613, 4.21177], device=device)
     dt = 0.01
-    device = torch.device('cpu')
     ode_opt = ODEOptimizer(f=func, fourier_order=fourier_order, u_dim=u_dim,
                            t_0=t_0, x_0=x_0, t_1=t_1, x_1=x_1,
                            dt=dt, device=device)
     coeff = torch.randn(size=(1, 2 * ode_opt.n_coeff_fourier * x_0.shape[0]), device=device)
 
-    # output = gradient_descent(f=ode_opt.run, in_data=coeff, lrate=0.001, it=10000, device=device)
-    output = newton_raphson(func=ode_opt.run, input_data=coeff)
+    output = gradient_descent(f=ode_opt.run, in_data=coeff, lrate=0.001, it=1000, device=device)
+    # output = newton_raphson(func=ode_opt.run, input_data=coeff)
     coeff = output.view((2 * ode_opt.n_coeff_fourier, x_0.shape[0]))
-    x_t = ode_opt.fourier(coeff=coeff[:ode_opt.n_coeff_fourier, :]).detach().numpy()
+    x_t = ode_opt.fourier(coeff=coeff[:ode_opt.n_coeff_fourier, :]).cpu().detach().numpy()
     plt.plot(x_t[:, 0], x_t[:, 1])
     plt.show()
 
