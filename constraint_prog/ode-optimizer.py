@@ -77,22 +77,23 @@ def main():
             dim=-1
         )
 
+    u_dim = 2
     fourier_order = 5
-    t_0, t_1 = 2.0, 4.0
-    x_0 = torch.tensor(data=[0.988802, 0.761768])
+    t_0, t_1 = 0.0, 4.0
+    x_0 = torch.tensor(data=[1.0, 1.0])
     x_1 = torch.tensor(data=[-1.17613, 4.21177])
     dt = 0.01
     device = torch.device('cpu')
-    ode_opt = ODEOptimizer(f=func, fourier_order=fourier_order,
+    ode_opt = ODEOptimizer(f=func, fourier_order=fourier_order, u_dim=u_dim,
                            t_0=t_0, x_0=x_0, t_1=t_1, x_1=x_1,
                            dt=dt, device=device)
-    coeff = torch.randn(size=(1, (4 * fourier_order + 2) * x_0.shape[0]), device=device)
+    coeff = torch.randn(size=(1, 2 * ode_opt.n_coeff_fourier * x_0.shape[0]), device=device)
 
     # output = gradient_descent(f=ode_opt.run, in_data=coeff, lrate=0.001, it=10000, device=device)
     output = newton_raphson(func=ode_opt.run, input_data=coeff)
-    coeff = output.view((4 * fourier_order + 2, x_0.shape[0]))
-    x_t = ode_opt.fourier(coeff=coeff[:2 * fourier_order + 1, :]).detach().numpy()
-    plt.plot(x_t[0], x_t[1])
+    coeff = output.view((2 * ode_opt.n_coeff_fourier, x_0.shape[0]))
+    x_t = ode_opt.fourier(coeff=coeff[:ode_opt.n_coeff_fourier, :]).detach().numpy()
+    plt.plot(x_t[:, 0], x_t[:, 1])
     plt.show()
 
 
