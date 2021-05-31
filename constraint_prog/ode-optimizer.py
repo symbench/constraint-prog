@@ -21,23 +21,26 @@ import torch
 
 
 class ODEOptimizer:
-    def __init__(self, f: Callable, fourier_order: int,
+    def __init__(self, f: Callable, fourier_order: int, u_dim: int,
                  t_0: float, x_0: torch.Tensor, t_1: float, x_1: torch.Tensor,
                  dt: float, device: torch.device) -> None:
         self.f = f
         self.fourier_order = fourier_order
+        self.u_dim = u_dim
         assert t_1 >= t_0
         self.t_0, self.t_1, self.x_0, self.x_1 = t_0, t_1, x_0, x_1
         self.dt = dt
         self.device = device
 
+        self.x_dim = self.x_0.shape[0]
+        self.n_coeff_fourier = 2 * self.fourier_order + 1
         self.t = torch.linspace(start=t_0, end=t_1, steps=int((t_1 - t_0) / self.dt),
                                 requires_grad=True, device=self.device).view((-1, 1))
 
     def run(self, coeff: torch.Tensor) -> torch.Tensor:
-        coeff_ = coeff.view((4 * self.fourier_order + 2, self.x_0.shape[0]))
-        u_t = self.fourier(coeff=coeff_[2 * self.fourier_order + 1:, :])
-        x_t = self.fourier(coeff=coeff_[:2 * self.fourier_order + 1, :])
+        coeff_ = coeff.view((2 * self.n_coeff_fourier, self.x_dim))
+        x_t = self.fourier(coeff=coeff_[:self.n_coeff_fourier, :])
+        u_t = self.fourier(coeff=coeff_[self.n_coeff_fourier:, :])
         dx_dt_list = []
         for idx in range(coeff_.shape[1]):
             dx_dt_list.append(torch.autograd.grad(inputs=self.t,
