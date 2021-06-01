@@ -94,7 +94,7 @@ if __name__ == '__main__':
     net.double()
     print(net)  # net architecture
     #optimizer = torch.optim.SGD(net.parameters(), lr=0.01)
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.0005)
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.00001)
     loss_func = torch.nn.MSELoss()
 
     if(len(sys.argv)>1):
@@ -138,9 +138,9 @@ if __name__ == '__main__':
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
 
-        if epoch % 10 == 0:
-            print("loss: ",loss)
-            print("validation: ", validate_net(net, mesh.numpy(), dist.numpy()))
+        if epoch % 20 == 0:
+            print(epoch,"epoch loss: ",loss)
+            print(epoch,"epoch validation: ", validate_net(net, mesh.numpy(), dist.numpy()))
 
     torch.save(net, "net.pt")
 
@@ -160,18 +160,22 @@ if __name__ == '__main__':
     plt.savefig("o2.pdf", bbox_inches='tight')
     plt.show()
 
-    predicted_surface = np.zeros_like(dist)
-    for i in range(mesh.numpy().shape[0]):
-        for j in range(mesh.numpy().shape[1]):
-            input = Variable(torch.tensor(np.array([mesh[i, j, 1, 0].numpy(),mesh[i, j, 1, 1].numpy(),5.0])))
-            prediction = net(input)
-            predicted_surface[i,j,0] = prediction
-
     fig, ax3 = plt.subplots(subplot_kw={"projection": "3d"})
     ax3.plot_surface(
         mesh[:, :, 1, 0].numpy(),
         mesh[:, :, 1, 1].numpy(),
-        predicted_surface[:,:,0])
+        predicted_surface[:,:,10])
+    plt.title("10")
     plt.savefig("o3.pdf", bbox_inches='tight')
+    plt.show()
+
+    
+    fig, ax3 = plt.subplots(subplot_kw={"projection": "3d"})
+    ax3.plot_surface(
+        mesh[:, :, 1, 0].numpy(),
+        mesh[:, :, 1, 1].numpy(),
+        predicted_surface[:,:,19])
+    plt.title("19")
+    plt.savefig("o4.pdf", bbox_inches='tight')
     plt.show()
 
