@@ -17,7 +17,6 @@
 import argparse
 import importlib.util
 from inspect import getmembers
-from copy import deepcopy
 import json
 import os
 
@@ -251,9 +250,9 @@ class Explorer:
         """
         # Append fixed values to samples
         samples = output_data.float_data
-        float_vars = deepcopy(self.func.input_names)
-        float_vars.extend(list(self.fixed_values.keys()))
-        float_vars.extend(list(self.expressions.keys()))
+        float_vars = list(self.func.input_names)
+        float_vars.extend(self.fixed_values.keys())
+        float_vars.extend(self.expressions.keys())
         float_data = samples.detach().cpu().numpy()
         columns_fixed_values = np.repeat(
             np.array([list(self.fixed_values.values())]),
