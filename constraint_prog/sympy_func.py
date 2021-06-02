@@ -59,10 +59,11 @@ class SympyFunc(object):
                  input_data: torch.tensor,
                  equs_as_float: bool) -> torch.tensor:
         """
-        Evaluates the set of expressions using the given input data.
-        If equs_as_float is true, then sympy equations and inequalities
-        are returned as float values that must be zero as opposed to
-        boolean tensors.
+        Evaluates the set of expressions using the given input data. If
+        equs_as_float is true, then sympy equations and inequalities are
+        returned as float values as the difference between the two sides,
+        as opposed to boolean tensors. The shape of the input must be
+        [*, len(input_names)] and the output is of shape [*, len(expressions)].
         """
         assert input_data.shape[-1] == len(self.input_names)
         self._input_data = input_data.unbind(dim=-1)
