@@ -23,6 +23,7 @@ class TorchStandardScaler:
     """
     Standard scaler class using torch data methods
     """
+
     def __init__(self):
         self.mean = None
         self.std = None

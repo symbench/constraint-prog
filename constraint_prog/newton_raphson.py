@@ -19,7 +19,7 @@ from typing import Callable, Optional
 import torch
 
 
-def jacobian(func: Callable, input_data: torch.tensor) -> torch.tensor:
+def jacobian(func: Callable, input_data: torch.Tensor) -> torch.Tensor:
     """
     Calculates the output and the Jacobian of the function at the given
     input data. The input data is of shape [*, input_size], while the
@@ -50,7 +50,7 @@ def jacobian(func: Callable, input_data: torch.tensor) -> torch.tensor:
     return output_data.detach(), jacobian_data.detach()
 
 
-def pseudo_inverse1(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor:
+def pseudo_inverse1(matrix: torch.Tensor, epsilon: float = 1e-3) -> torch.Tensor:
     """
     Takes a tensor of shape [*, rows, cols] and returns a tensor of shape
     [*, cols, rows]. Only the singular values above epsilon are inverted,
@@ -69,7 +69,7 @@ def pseudo_inverse1(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor
     return torch.matmul(a, u.transpose(-2, -1))
 
 
-def pseudo_inverse2(matrix: torch.tensor, epsilon: float = 1e-3) -> torch.tensor:
+def pseudo_inverse2(matrix: torch.Tensor, epsilon: float = 1e-3) -> torch.Tensor:
     """
     Takes a tensor of shape [*, rows, cols] and returns a tensor of shape
     [*, cols, rows].
@@ -107,22 +107,22 @@ class MethodMinMax(object):
     outside of the box and setting them to zero.
     """
 
-    def __init__(self, func: Callable, bounding_box: torch.tensor):
+    def __init__(self, func: Callable, bounding_box: torch.Tensor):
         self.func = func
         self.bounding_box = bounding_box
         self.zero = torch.zeros((), device=bounding_box.device)
 
-    def __call__(self, input_data: torch.tensor) -> torch.tensor:
+    def __call__(self, input_data: torch.Tensor) -> torch.Tensor:
         output_data = self.func(input_data)
         min_err = (self.bounding_box[0] - input_data).maximum(self.zero)
         max_err = (input_data - self.bounding_box[1]).maximum(self.zero)
         return torch.cat((output_data, min_err + max_err), dim=-1)
 
 
-def newton_raphson(func: Callable, input_data: torch.tensor,
+def newton_raphson(func: Callable, input_data: torch.Tensor,
                    num_iter: int = 10, epsilon: float = 1e-3,
                    bounding_box: Optional[torch.tensor] = None,
-                   method: str = "clip") -> torch.tensor:
+                   method: str = "clip") -> torch.Tensor:
     """
     Calculates num_iter many iterations of the multidimensional Newton-
     Raphson method. The input_data must of shape [*, input_size]. The func
