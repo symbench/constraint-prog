@@ -17,10 +17,10 @@
 from collections import Counter
 import csv
 import os
-from typing import List
+from typing import List, Union
 
 import matplotlib.pyplot as plt
-import numpy as np
+import numpy
 import sympy
 import torch
 
@@ -29,7 +29,7 @@ from constraint_prog.sympy_func import SympyFunc
 
 class PointCloud:
     def __init__(self, float_vars: List[str], float_data: torch.Tensor,
-                 string_vars: List[str] = None, string_data: np.ndarray = None):
+                 string_vars: List[str] = None, string_data: numpy.ndarray = None):
         """
         Creates a point cloud with num_vars many named coordinates.
         The shape of the float_data must be [num_points, num_vars].
@@ -43,7 +43,7 @@ class PointCloud:
         if string_vars is None:
             assert string_data is None
             self.string_vars = []
-            self.string_data = np.empty(shape=(float_data.shape[0], 0), dtype=str)
+            self.string_data = numpy.empty(shape=(float_data.shape[0], 0), dtype=str)
         else:
             assert string_data.ndim == 2
             assert string_data.shape[0] == float_data.shape[0]
@@ -53,7 +53,7 @@ class PointCloud:
 
         # check whether all variables are unique
         total_vars = self.float_vars + self.string_vars
-        assert len(np.unique(total_vars)) == len(total_vars)
+        assert len(numpy.unique(total_vars)) == len(total_vars)
 
     @property
     def num_float_vars(self):
@@ -71,6 +71,57 @@ class PointCloud:
     @property
     def device(self):
         return self.float_data.device
+
+    @property
+    def dictionary(self):
+        result = dict()
+        for idx, var in enumerate(self.float_vars):
+            result[var] = self.float_data[:, idx]
+        for idx, var in enumerate(self.string_vars):
+            result[var] = self.string_data[:, idx]
+        return result
+
+    def __getitem__(self, var: str) -> Union[torch.Tensor, numpy.ndarray]:
+        """
+        Implements the indexing operator so that the point cloud can be used
+        as a dictionary.
+        """
+        if var in self.string_vars:
+            idx = self.string_vars.index(var)
+            return self.string_data[:, idx]
+        else:
+            idx = self.float_vars.index(var)
+            return self.float_data[:, idx]
+
+    def __setitem__(self, var: str, data: Union[float, str, torch.Tensor, numpy.ndarray]):
+        """
+        Implements the indexing operator so that the point cloud can be used
+        as a dictionary and a full float or string column can be updated.
+        """
+        if isinstance(data, str):
+            data = numpy.full((self.num_points, ), data)
+        elif isinstance(data, float):
+            data = torch.full((self.num_points, ), data, dtype=torch.float32, device=self.device)
+
+        # https://stackoverflow.com/questions/12569452/how-to-identify-numpy-types-in-python
+        if type(data).__module__ == numpy.__name__:
+            data = numpy.expand_dims(data, axis=1)
+            if var in self.string_vars:
+                idx = self.string_vars.index(var)
+                layers = (self.string_data[:, :idx], data, self.string_data[:, idx+1:])
+            else:
+                self.string_vars.append(var)
+                layers = (self.string_data, data)
+            self.string_data = numpy.concatenate(layers, axis=1)
+        elif isinstance(data, torch.Tensor):
+            if var in self.float_vars:
+                idx = self.float_vars.index(var)
+                self.float_data[:, idx] = data
+            else:
+                self.float_vars.append(var)
+                self.float_data = torch.cat(
+                    (self.float_data, torch.unsqueeze(data, dim=-1)),
+                    dim=1)
 
     def print_info(self):
         print("float shape: {}, string shape: {}".format(
@@ -91,18 +142,18 @@ class PointCloud:
                 header = []
                 header.extend(self.float_vars)
                 header.extend(self.string_vars)
-                data = np.append(self.float_data.detach().float().cpu().numpy(),
-                                 self.string_data,
-                                 axis=1)
+                data = numpy.append(self.float_data.detach().float().cpu().numpy(),
+                                    self.string_data,
+                                    axis=1)
 
                 writer.writerow(header)
                 writer.writerows(data)
         elif ext == ".npz":
-            np.savez_compressed(file=filename,
-                                float_vars=self.float_vars,
-                                float_data=self.float_data.detach().float().cpu().numpy(),
-                                string_vars=self.string_vars,
-                                string_data=self.string_data)
+            numpy.savez_compressed(file=filename,
+                                   float_vars=self.float_vars,
+                                   float_data=self.float_data.detach().float().cpu().numpy(),
+                                   string_vars=self.string_vars,
+                                   string_data=self.string_data)
         else:
             raise ValueError("invalid filename extension")
 
@@ -113,29 +164,29 @@ class PointCloud:
         """
         ext = os.path.splitext(filename)[1]
         if ext == ".csv":
-            data = np.loadtxt(fname=filename, delimiter=delimiter, dtype=str)
+            data = numpy.loadtxt(fname=filename, delimiter=delimiter, dtype=str)
 
             string_vars, string_data, float_vars, float_data = [], [], [], []
             for header, col in zip(data[0, :], data[1:, :].T):
                 try:
-                    float_data.append(col.astype(np.float32))
+                    float_data.append(col.astype(numpy.float32))
                     float_vars.append(header)
                 except ValueError:
                     string_data.append(col)
                     string_vars.append(header)
-            float_data = torch.tensor(np.array(float_data).T)
+            float_data = torch.tensor(numpy.array(float_data).T)
 
             if len(string_vars) < 1:
                 string_vars, string_data = None, None
             else:
-                string_data = np.array(string_data)
+                string_data = numpy.array(string_data)
 
             return PointCloud(float_vars=float_vars,
                               float_data=float_data,
                               string_vars=string_vars,
                               string_data=string_data)
         elif ext == ".npz":
-            data = np.load(file=filename, allow_pickle=False)
+            data = numpy.load(file=filename, allow_pickle=False)
 
             # Enable backwards compatibility for data files of previous version
             if "sample_vars" in data.files:
