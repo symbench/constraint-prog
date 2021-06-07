@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable, List
+from typing import Callable, Dict, List
 
 import torch
 import sympy
@@ -84,6 +84,22 @@ class SympyFunc(object):
                 nan=0.0, posinf=1e40, neginf=-1e40)
 
         return output_data
+
+    def evaluate2(self,
+                  expressions: Dict[str, sympy.Expr],
+                  input_data: Dict[str, torch.Tensor],
+                  equs_as_float: bool) -> Dict[str, torch.Tensor]:
+        """
+        New version of the evaluate function that uses dictionary.
+        """
+        input_data = [input_data[name] for name in self.input_names]
+        input_data = torch.stack(input_data, dim=-1)
+
+        output_data = self.evaluate(
+            expressions.values(), input_data, equs_as_float)
+        output_data = output_data.unbind(dim=-1)
+
+        return {var: output_data[idx] for idx, var in enumerate(expressions.keys())}
 
     def _eval_equ_as_sub(self, expr: sympy.Expr) -> torch.Tensor:
         if expr.func == sympy.Eq:
