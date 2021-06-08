@@ -38,6 +38,10 @@ class ODEOptimizer:
         self.x_dim = self.x_0.shape[0]
         self.n_coeff_fourier = 2 * self.fourier_order + 1
 
+        self.fourier = FourierFunc(fourier_order=self.fourier_order,
+                                   t=self.t,
+                                   device=self.device)
+
     def run(self, coeff: torch.Tensor) -> torch.Tensor:
         # Reshape input coefficient tensor
         coeff_ = coeff.view((self.n_coeff_fourier, self.x_dim + self.u_dim))
@@ -46,7 +50,7 @@ class ODEOptimizer:
         u_t = self.fourier(coeff=coeff_[:, self.x_dim:])
 
         # Get x'(t)
-        dx_dt = self.fourier_dt(coeff=coeff_[:, :self.x_dim])
+        dx_dt = self.fourier.d(coeff=coeff_[:, :self.x_dim])
 
         # Return with equalities in a lhs - rhs form
         return torch.cat(
@@ -54,21 +58,6 @@ class ODEOptimizer:
                      (x_t[-1] - self.x_1).flatten(),
                      (dx_dt - self.f(x_t, u_t)).flatten()]
         ).unsqueeze(dim=0)
-
-    def get_t_tensor(self, v_dim: int) -> torch.Tensor:
-        """
-        Return with tensor of time points with shape (self.fourier_order, self.t_dim, v_dim),
-        where output[i, j, k] = i * self.t[j]
-        """
-        t_tensor = \
-            torch.tile(input=self.t * torch.ones(v_dim, device=self.device),
-                       dims=(self.fourier_order, 1, 1)
-                       ) * \
-            torch.reshape(
-                input=torch.arange(start=1, end=self.fourier_order + 1, device=self.device),
-                shape=(self.fourier_order, 1, 1)
-            )
-        return t_tensor
 
     def fourier_2(self, coeff: torch.Tensor) -> torch.Tensor:
         """
@@ -97,6 +86,61 @@ class ODEOptimizer:
 
         return result
 
+    def fourier_dt_2(self, coeff: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates time derivative of Fourier approximation
+        using input coefficients with shape (2 * order + 1, *)
+        and returns tensor with shape (t, *)
+        """
+        v_dim = coeff.shape[1]
+        # Initialize zero tensor with shape (self.t_dim, v_dim)
+        result = torch.zeros(size=(self.t_dim, v_dim), device=self.device)
+
+        for j in range(1, self.fourier_order + 1):
+            # Broadcasting is used: (self.t_dim, 1) * (v_dim, ) * (v_dim, ) = (self.t_dim, v_dim)
+            # Add cosine term
+            result = result + \
+                (-j) * torch.sin(input=j * self.t) * \
+                torch.ones(v_dim, device=self.device) * \
+                coeff[j, :]
+            # Add sine term
+            result = result + \
+                j * torch.cos(input=j * self.t) * \
+                torch.ones(v_dim, device=self.device) * \
+                coeff[self.fourier_order + j, :]
+
+        return result
+
+
+class FourierFunc:
+    def __init__(self, fourier_order: int, t: torch.Tensor, device: torch.device) -> None:
+        self.fourier_order = fourier_order
+        self.t = t
+        self.device = device
+
+        self.t_dim = self.t.shape[0]
+
+    def __call__(self, coeff: torch.Tensor):
+        return self.fourier(coeff=coeff)
+
+    def d(self, coeff: torch.Tensor):
+        return self.fourier_dt(coeff=coeff)
+
+    def get_t_tensor(self, v_dim: int) -> torch.Tensor:
+        """
+        Return with tensor of time points with shape (self.fourier_order, self.t_dim, v_dim),
+        where output[i, j, k] = i * self.t[j]
+        """
+        t_tensor = \
+            torch.tile(input=self.t * torch.ones(v_dim, device=self.device),
+                       dims=(self.fourier_order, 1, 1)
+                       ) * \
+            torch.reshape(
+                input=torch.arange(start=1, end=self.fourier_order + 1, device=self.device),
+                shape=(self.fourier_order, 1, 1)
+            )
+        return t_tensor
+
     def fourier(self, coeff: torch.Tensor) -> torch.Tensor:
         """
         Calculates Fourier approximation using input coefficients with shape (2 * order + 1, *)
@@ -123,31 +167,6 @@ class ODEOptimizer:
         sin_part = torch.sum(input=sin_tensor, dim=0)
         # Get result as a sum of constant, cosine and sine parts
         result = const_part + cos_part + sin_part
-        return result
-
-    def fourier_dt_2(self, coeff: torch.Tensor) -> torch.Tensor:
-        """
-        Calculates time derivative of Fourier approximation
-        using input coefficients with shape (2 * order + 1, *)
-        and returns tensor with shape (t, *)
-        """
-        v_dim = coeff.shape[1]
-        # Initialize zero tensor with shape (self.t_dim, v_dim)
-        result = torch.zeros(size=(self.t_dim, v_dim), device=self.device)
-
-        for j in range(1, self.fourier_order + 1):
-            # Broadcasting is used: (self.t_dim, 1) * (v_dim, ) * (v_dim, ) = (self.t_dim, v_dim)
-            # Add cosine term
-            result = result + \
-                (-j) * torch.sin(input=j * self.t) * \
-                torch.ones(v_dim, device=self.device) * \
-                coeff[j, :]
-            # Add sine term
-            result = result + \
-                j * torch.cos(input=j * self.t) * \
-                torch.ones(v_dim, device=self.device) * \
-                coeff[self.fourier_order + j, :]
-
         return result
 
     def fourier_dt(self, coeff: torch.Tensor) -> torch.Tensor:
