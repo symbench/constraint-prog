@@ -187,8 +187,8 @@ def main():
     # Function generating the flow (dynamical system)
     def func(x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
         return torch.stack(
-            tensors=[-3 * x[:, 1] + u[:, 0],
-                     2 * x[:, 0] + u[:, 1]],
+            tensors=[-x[:, 0] + x[:, 1],
+                     -2 * x[:, 0]],
             dim=-1
         )
 
@@ -196,9 +196,9 @@ def main():
     device = torch.device('cpu')
     u_dim = 2
     fourier_order = 5
-    t_0, t_1 = 0.0, 4.0
+    t_0, t_1 = 0.0, 5.0
     x_0 = torch.tensor(data=[1.0, 1.0], device=device)
-    x_1 = torch.tensor(data=[-1.17613, 4.21177], device=device)
+    x_1 = torch.tensor(data=[0.0877126, 0.0473586], device=device)
     dt = 0.01
 
     ode_opt = ODEOptimizer(f=func, fourier_order=fourier_order, u_dim=u_dim,
