@@ -228,6 +228,26 @@ class PointCloud:
         return PointCloud(float_vars=float_vars,
                           float_data=float_data)
 
+    def add_mutations(self, stddev: List[float], num_points: int):
+        """
+        Take random elements from the point cloud and add random permutations
+        to the given coordinates so that the total number of points is
+        num_points.
+        """
+        count = num_points - self.num_points
+        if count <= 0:
+            return
+
+        indices = torch.randint(0, self.num_points, (count, ), device=self.device)
+        mutation = torch.rand(size=(count, self.num_float_vars), device=self.device)
+        mutation = mutation * torch.tensor([stddev], dtype=torch.float32, device=self.device)
+        new_data = self.float_data[indices] + mutation
+        self.float_data = torch.cat((self.float_data, new_data), dim=0)
+
+        indices = indices.numpy()
+        new_data = self.string_data[indices]
+        self.string_data = numpy.concatenate((self.string_data, new_data), axis=0)
+
     def to_device(self, device="cpu"):
         """
         Moves the sample data to the given device.
