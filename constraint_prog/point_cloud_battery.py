@@ -46,6 +46,18 @@ class Net(torch.nn.Module):
         x = self.predict(x3)             # linear output
         return x
 
+def validate_net(net, data, ground_truth):
+    predicted_surface = np.zeros_like(ground_truth)
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+          for k in range(data.shape[2]):
+              input = Variable(torch.tensor(np.array([data[i, j, k, 0],data[i, j, k, 1],data[i, j, k, 2]/1000.0])))
+              prediction = net(input)
+              predicted_surface[i,j,k] = prediction.detach().numpy()
+
+    return np.sum(np.abs(ground_truth - predicted_surface))**2
+    
+
 if __name__ == '__main__':
 
     points = PointCloud.load(filename=os.path.join('..', 'notebooks', 'battery_packing.csv'), delimiter=';')
@@ -54,10 +66,19 @@ if __name__ == '__main__':
     points = points.projection(["hull_D", "hull_L", "total_CAP"])
     points.print_info()
 
-    xpos = torch.linspace(0.0, 1.0, 50)
-    ypos = torch.linspace(0.0, 1.0, 50)
-    cap = torch.linspace(5000.0, 5000.0, 50)
+    xpos = torch.linspace(0.0, 1.0, 40)
+    ypos = torch.linspace(0.0, 1.0, 40)
+    cap = torch.linspace(500.0, 5000.0, 20)
     mesh = torch.stack(torch.meshgrid(xpos, ypos, cap), dim=-1) #50,50,50,3
+    
+    dist = points.get_pareto_distance(directions=[-1, -1, 1], points=mesh) #50,50,50
+    fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
+    ax1.plot_surface(
+        mesh[:, :, 1, 0].numpy(),
+        mesh[:, :, 1, 1].numpy(),
+        dist[:,:,0].numpy())
+    plt.savefig("o1.pdf", bbox_inches='tight')
+    plt.show()
 
     net = torch.nn.Sequential(
         torch.nn.Linear(3, 100),
@@ -73,7 +94,7 @@ if __name__ == '__main__':
     net.double()
     print(net)  # net architecture
     #optimizer = torch.optim.SGD(net.parameters(), lr=0.01)
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.0005)
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.00001)
     loss_func = torch.nn.MSELoss()
 
     if(len(sys.argv)>1):
@@ -117,26 +138,19 @@ if __name__ == '__main__':
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
 
-        if epoch % 10 == 0:
-            print(loss)
+        if epoch % 20 == 0:
+            print(epoch,"epoch loss: ",loss)
+            print(epoch,"epoch validation: ", validate_net(net, mesh.numpy(), dist.numpy()))
 
     torch.save(net, "net.pt")
-
-    dist = points.get_pareto_distance(directions=[-1, -1, 1], points=mesh) #50,50,50
-    fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
-    ax1.plot_surface(
-        mesh[:, :, 1, 0].numpy(),
-        mesh[:, :, 1, 1].numpy(),
-        dist[:,:,40].numpy())
-    plt.savefig("o1.pdf", bbox_inches='tight')
-    plt.show()
 
     predicted_surface = np.zeros_like(dist)
     for i in range(mesh.numpy().shape[0]):
         for j in range(mesh.numpy().shape[1]):
-            input = Variable(torch.tensor(np.array([mesh[i, j, 1, 0].numpy(),mesh[i, j, 1, 1].numpy(),2.0])))
-            prediction = net(input)
-            predicted_surface[i,j,0] = prediction
+          for k in range(mesh.numpy().shape[2]):
+              input = Variable(torch.tensor(np.array([mesh[i, j, k, 0].numpy(),mesh[i, j, k, 1].numpy(),mesh[i, j, k, 2].numpy()/1000.0])))
+              prediction = net(input)
+              predicted_surface[i,j,k] = prediction
 
     fig, ax2 = plt.subplots(subplot_kw={"projection": "3d"})
     ax2.plot_surface(
@@ -146,18 +160,22 @@ if __name__ == '__main__':
     plt.savefig("o2.pdf", bbox_inches='tight')
     plt.show()
 
-    predicted_surface = np.zeros_like(dist)
-    for i in range(mesh.numpy().shape[0]):
-        for j in range(mesh.numpy().shape[1]):
-            input = Variable(torch.tensor(np.array([mesh[i, j, 1, 0].numpy(),mesh[i, j, 1, 1].numpy(),5.0])))
-            prediction = net(input)
-            predicted_surface[i,j,0] = prediction
-
     fig, ax3 = plt.subplots(subplot_kw={"projection": "3d"})
     ax3.plot_surface(
         mesh[:, :, 1, 0].numpy(),
         mesh[:, :, 1, 1].numpy(),
-        predicted_surface[:,:,0])
+        predicted_surface[:,:,10])
+    plt.title("10")
     plt.savefig("o3.pdf", bbox_inches='tight')
+    plt.show()
+
+    
+    fig, ax3 = plt.subplots(subplot_kw={"projection": "3d"})
+    ax3.plot_surface(
+        mesh[:, :, 1, 0].numpy(),
+        mesh[:, :, 1, 1].numpy(),
+        predicted_surface[:,:,19])
+    plt.title("19")
+    plt.savefig("o4.pdf", bbox_inches='tight')
     plt.show()
 

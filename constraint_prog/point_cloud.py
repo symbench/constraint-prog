@@ -341,6 +341,7 @@ class PointCloud:
         func = SympyFunc(expressions, device=self.device)
         assert all(var in self.float_vars for var in func.input_names)
 
+        # TODO: speed it up, remove stack from here and unbind from SympyFunc
         input_data = []
         for var in func.input_names:
             idx = self.float_vars.index(var)

@@ -15,18 +15,98 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-from copy import deepcopy
+import importlib.util
+from inspect import getmembers
 import json
 import os
 
 import numpy as np
 import torch
+import sympy
 
 from constraint_prog.sympy_func import SympyFunc, Scaler
 from constraint_prog.gradient_descent import gradient_descent
 from constraint_prog.newton_raphson import newton_raphson
-from constraint_prog.problem_loader import ProblemLoader
 from constraint_prog.point_cloud import PointCloud
+
+
+class ProblemLoader:
+    def __init__(self, problem_json):
+        self.problem_json = problem_json
+        with open(self.problem_json) as f:
+            self.json_content = json.loads(f.read())
+
+        self.equations = dict()
+        self.expressions = dict()
+        self.get_equations_and_expressions()
+
+        self.fixed_values = dict()
+        self.constraints = self.process_constraints()
+
+    def process_constraints(self) -> dict:
+        # disregard entries that start with a dash
+        constraints = {key: val
+                       for (key, val) in self.json_content["variables"].items()
+                       if not key.startswith('-')}
+
+        # collect fixed values and substitute them into the equations
+        self.fixed_values = {key: val["min"]
+                             for (key, val) in constraints.items()
+                             if val["min"] == val["max"]}
+        for key, val in self.fixed_values.items():
+            print("Fixing {} to {}".format(key, val))
+            for val2 in self.equations.values():
+                val2["expr"] = val2["expr"].subs(sympy.Symbol(key), val)
+            self.expressions = {key2: val2.subs(sympy.Symbol(key), val)
+                                for (key2, val2) in self.expressions.items()}
+            del constraints[key]
+
+        return constraints
+
+    def get_equations_and_expressions(self) -> None:
+        path = os.path.join(
+            os.path.dirname(self.problem_json), self.json_content["source"])
+        print("Loading python file:", path)
+        if not os.path.exists(path):
+            raise FileNotFoundError()
+
+        spec = importlib.util.spec_from_file_location("equmod", path)
+        equmod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(equmod)
+        members = getmembers(equmod)
+
+        def find_member(name_):
+            for member_ in members:
+                if member_[0] == name_:
+                    return member_[1]
+            return None
+
+        self.equations.clear()
+        for (name, conf) in self.json_content["equations"].items():
+            if name.startswith('-'):
+                continue
+            member = find_member(name)
+            if member is None:
+                raise ValueError("equation " + name + " not found")
+            assert (isinstance(member, sympy.Eq) or
+                    isinstance(member, sympy.LessThan) or
+                    isinstance(member, sympy.StrictLessThan) or
+                    isinstance(member, sympy.GreaterThan) or
+                    isinstance(member, sympy.StrictGreaterThan))
+
+            self.equations[name] = {
+                "expr": member,
+                "tolerance": conf["tolerance"]
+            }
+
+        self.expressions.clear()
+        for name in self.json_content["expressions"]:
+            if name.startswith('-'):
+                continue
+            member = find_member(name)
+            if member is None:
+                raise ValueError("expression " + name + " not found")
+            self.expressions[name] = member
 
 
 class Explorer:
@@ -170,9 +250,9 @@ class Explorer:
         """
         # Append fixed values to samples
         samples = output_data.float_data
-        float_vars = deepcopy(self.func.input_names)
-        float_vars.extend(list(self.fixed_values.keys()))
-        float_vars.extend(list(self.expressions.keys()))
+        float_vars = list(self.func.input_names)
+        float_vars.extend(self.fixed_values.keys())
+        float_vars.extend(self.expressions.keys())
         float_data = samples.detach().cpu().numpy()
         columns_fixed_values = np.repeat(
             np.array([list(self.fixed_values.values())]),
