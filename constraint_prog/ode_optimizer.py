@@ -57,7 +57,7 @@ class ODEOptimizer:
         return torch.cat(
             tensors=[(x_t[0] - self.x_0).flatten(),
                      (x_t[-1] - self.x_1).flatten(),
-                     (dx_dt - self.f(x_t, u_t)).flatten()]
+                     self.f(x=x_t, dx=dx_dt, u=u_t).flatten()]
         ).unsqueeze(dim=0)
 
 
@@ -124,8 +124,7 @@ class FourierFunc:
         tt = self.__get_t_tensor(v_dim=v_dim,
                                  n_samples=n_samples)
         # Get cosine and sine part
-        # Broadcasting: shape_1 * shape_2, 
-        # where
+        # Broadcasting: shape_1 * shape_2, where
         #  > shape_1 = (n_samples, self.order, self.t_dim, v_dim)
         #  > shape_2 = (n_samples, self.order, 1, v_dim)
         # Summation along dim=1: shape_1 -> (n_samples, self.t_dim, v_dim)
@@ -191,10 +190,10 @@ class FourierFunc:
 
 def main():
     # Function generating the flow (dynamical system)
-    def func(x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+    def func(x: torch.Tensor, dx: torch.Tensor,  u: torch.Tensor) -> torch.Tensor:
         return torch.stack(
-            tensors=[-x[:, 0] + x[:, 1],
-                     -2 * x[:, 0]],
+            tensors=[-x[:, 0] + x[:, 1] - dx[:, 0],
+                     -2 * x[:, 0] - dx[:, 1]],
             dim=-1
         )
 
