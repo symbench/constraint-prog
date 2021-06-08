@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable, List
+from typing import Callable, Dict, List
 
 import torch
 import sympy
@@ -51,13 +51,13 @@ class SympyFunc(object):
         for arg in expr.args:
             self.add_input_symbols(arg)
 
-    def __call__(self, input_data: torch.tensor,
-                 equs_as_float: bool = True) -> torch.tensor:
+    def __call__(self, input_data: torch.Tensor,
+                 equs_as_float: bool = True) -> torch.Tensor:
         return self.evaluate(self.expressions, input_data, equs_as_float)
 
     def evaluate(self, expressions: List[sympy.Expr],
-                 input_data: torch.tensor,
-                 equs_as_float: bool) -> torch.tensor:
+                 input_data: torch.Tensor,
+                 equs_as_float: bool) -> torch.Tensor:
         """
         Evaluates the set of expressions using the given input data. If
         equs_as_float is true, then sympy equations and inequalities are
@@ -85,7 +85,23 @@ class SympyFunc(object):
 
         return output_data
 
-    def _eval_equ_as_sub(self, expr: sympy.Expr) -> torch.tensor:
+    def evaluate2(self,
+                  expressions: Dict[str, sympy.Expr],
+                  input_data: Dict[str, torch.Tensor],
+                  equs_as_float: bool) -> Dict[str, torch.Tensor]:
+        """
+        New version of the evaluate function that uses dictionary.
+        """
+        input_data = [input_data[name] for name in self.input_names]
+        input_data = torch.stack(input_data, dim=-1)
+
+        output_data = self.evaluate(
+            expressions.values(), input_data, equs_as_float)
+        output_data = output_data.unbind(dim=-1)
+
+        return {var: output_data[idx] for idx, var in enumerate(expressions.keys())}
+
+    def _eval_equ_as_sub(self, expr: sympy.Expr) -> torch.Tensor:
         if expr.func == sympy.Eq:
             assert len(expr.args) == 2
             value0 = self._eval(expr.args[0])
@@ -104,7 +120,7 @@ class SympyFunc(object):
         else:
             return self._eval(expr)
 
-    def _eval(self, expr: sympy.Expr) -> torch.tensor:
+    def _eval(self, expr: sympy.Expr) -> torch.Tensor:
         if (expr.func == sympy.Integer or expr.func == sympy.Float
                 or expr.func == sympy.core.numbers.Rational
                 or expr.func == sympy.core.numbers.NegativeOne
@@ -230,7 +246,7 @@ class Scaler(object):
     equations.
     """
 
-    def __init__(self, func: Callable, scaling: torch.tensor):
+    def __init__(self, func: Callable, scaling: torch.Tensor):
         """
         The scaling must be a tensor of shape [output_size].
         """
@@ -238,7 +254,7 @@ class Scaler(object):
         assert scaling.ndim == 1
         self.scaling = scaling
 
-    def __call__(self, input_data: torch.tensor,
-                 equs_as_float: bool = True) -> torch.tensor:
+    def __call__(self, input_data: torch.Tensor,
+                 equs_as_float: bool = True) -> torch.Tensor:
         output_data = self.func(input_data, equs_as_float)
         return output_data * self.scaling
