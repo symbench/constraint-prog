@@ -105,6 +105,7 @@ class PointCloud:
 
         # https://stackoverflow.com/questions/12569452/how-to-identify-numpy-types-in-python
         if type(data).__module__ == numpy.__name__:
+            assert var not in self.float_vars
             data = numpy.expand_dims(data, axis=1)
             if var in self.string_vars:
                 idx = self.string_vars.index(var)
@@ -112,8 +113,10 @@ class PointCloud:
             else:
                 self.string_vars.append(var)
                 layers = (self.string_data, data)
+            # we have to recreate the array because of fixed string sizes
             self.string_data = numpy.concatenate(layers, axis=1)
         elif isinstance(data, torch.Tensor):
+            assert var not in self.string_vars
             if var in self.float_vars:
                 idx = self.float_vars.index(var)
                 self.float_data[:, idx] = data
