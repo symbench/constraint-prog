@@ -36,6 +36,7 @@ class ODEOptimizer:
         self.n_coeff_fourier = 2 * self.fourier_order + 1
         self.t = torch.linspace(start=t_0, end=t_1, steps=int((t_1 - t_0) / self.dt),
                                 requires_grad=True, device=self.device).view((-1, 1))
+        self.n_t = self.t.shape[0]
 
     def run(self, coeff: torch.Tensor) -> torch.Tensor:
         # Reshape input coefficient tensor
@@ -64,26 +65,66 @@ class ODEOptimizer:
         ).unsqueeze(dim=0)
 
     def fourier(self, coeff: torch.Tensor) -> torch.Tensor:
-        # Initialize zero tensor with shape (t.shape[0], x_dim/u_dim)
-        result = torch.zeros(size=(self.t.shape[0], coeff.shape[1]),
-                             device=self.device)
+        """
+        Calculates Fourier approximation using input coefficients with shape (2 * order + 1, *)
+        and returns tensor with shape (t, *)
+        """
+        v_dim = coeff.shape[1]
+        # Initialize zero tensor with shape (self.n_t, v_dim)
+        result = torch.zeros(size=(self.n_t, v_dim), device=self.device)
         # Add constant term
-        # Broadcasting is used: (t.shape[0], x_dim) * (x_dim, ) = (t, shape[0], x_dim)
+        # Broadcasting is used: (self.n_t, v_dim) * (v_dim, ) = (self.n_t, v_dim)
         result = result + torch.ones_like(input=result, device=self.device) * coeff[0, :]
 
-        for j in range(1, self.fourier_order):
-            # Broadcasting is used: (t.shape[0], 1) * (x_dim, ) * (x_dim, ) = (t.shape[0], x_dim)
+        for j in range(1, self.fourier_order + 1):
+            # Broadcasting is used: (self.n_t, 1) * (v_dim, ) * (v_dim, ) = (self.n_t, v_dim)
             # Add cosine term
             result = result + \
                 torch.cos(input=j * self.t) * \
-                torch.ones(coeff.shape[1], device=self.device) * \
-                coeff[2 * j - 1, :]
+                torch.ones(v_dim, device=self.device) * \
+                coeff[j, :]
             # Add sine term
             result = result + \
                 torch.sin(input=j * self.t) * \
-                torch.ones(coeff.shape[1], device=self.device) * \
-                coeff[2 * j, :]
+                torch.ones(v_dim, device=self.device) * \
+                coeff[self.fourier_order + j, :]
 
+        return result
+
+    def fourier_2(self, coeff: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates Fourier approximation using input coefficients with shape (2 * order + 1, *)
+        and returns tensor with shape (t, *)
+        """
+        v_dim = coeff.shape[1]
+        # Calculate zeroth order part
+        # Broadcasting: (self.n_t, v_dim) * (1, v_dim)
+        const_part = torch.ones(size=(self.n_t, v_dim), device=self.device) * coeff[0, :]
+        # Get tensor of time points with shape (self.fourier_order, self.n_t, v_dim)
+        # tt[i, j, k] = i * self.t[j]
+        tt = \
+            torch.tile(input=self.t * torch.ones(v_dim, device=self.device),
+                       dims=(self.fourier_order, 1, 1)
+                       ) * \
+            torch.reshape(
+                input=torch.arange(start=1, end=self.fourier_order + 1, device=self.device),
+                shape=(self.fourier_order, 1, 1)
+            )
+        # Get cosine and sine part
+        # Broadcasting: (self.fourier_order, self.n_t, v_dim) * (self.fourier_order, 1, v_dim)
+        # Summation along dim=0: (self.fourier_order, self.n_t, v_dim) -> (self.n_t, v_dim)
+        cos_part = \
+            torch.sum(
+                input=torch.cos(input=tt) * torch.reshape(input=coeff[1:self.fourier_order + 1, :],
+                                                          shape=(self.fourier_order, 1, v_dim)),
+                dim=0)
+        sin_part = \
+            torch.sum(
+                input=torch.sin(input=tt) * torch.reshape(input=coeff[self.fourier_order + 1:, :],
+                                                          shape=(self.fourier_order, 1, v_dim)),
+                dim=0)
+        # Get result as a sum of constant, cosine and sine parts
+        result = const_part + cos_part + sin_part
         return result
 
 
