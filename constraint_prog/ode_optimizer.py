@@ -38,8 +38,7 @@ class ODEOptimizer:
                                 device=self.device
                                 ).view((-1, 1))
         self.fourier = FourierFunc(order=self.fourier_order,
-                                   t=self.t,
-                                   device=self.device)
+                                   t=self.t)
         # Size values
         self.t_dim = self.t.shape[0]
         self.x_dim = self.x_0.shape[0]
@@ -63,30 +62,32 @@ class ODEOptimizer:
 
 
 class FourierFunc:
-    def __init__(self, order: int, t: torch.Tensor,
-                 device: torch.device = torch.device('cpu')) -> None:
+    def __init__(self, order: int, t: torch.Tensor) -> None:
         self.order = order
         self.t = t
-        self.device = device
         # Size value
         self.t_dim = self.t.shape[0]
+        # Other member variables
+        self.device = None
 
-    def __call__(self, coeff: torch.Tensor):
+    def __call__(self, coeff: torch.Tensor) -> torch.Tensor:
         """
         Returns with the Fourier approximation with shape (n_samples, t_dim, *)
         for input coefficient tensor with shape (n_samples, 2 * order + 1, *)
         """
-        return self.fourier(coeff=coeff)
+        self.device = coeff.device
+        return self.__fourier(coeff=coeff)
 
-    def d(self, coeff: torch.Tensor):
+    def d(self, coeff: torch.Tensor) -> torch.Tensor:
         """
         Returns with the time derivative of the Fourier approximation
         with shape (n_samples, t_dim, *) for input coefficient tensor
         with shape (n_samples, 2 * order + 1, *)
         """
-        return self.fourier_dt(coeff=coeff)
+        self.device = coeff.device
+        return self.__fourier_dt(coeff=coeff)
 
-    def get_t_tensor(self, v_dim: int, n_samples: int) -> torch.Tensor:
+    def __get_t_tensor(self, v_dim: int, n_samples: int) -> torch.Tensor:
         """
         Returns with tensor of time points with shape (n_samples, order, t_dim, v_dim),
         where output[i, j, k, l] = j * self.t[k]
@@ -102,7 +103,7 @@ class FourierFunc:
             )
         return t_tensor
 
-    def fourier(self, coeff: torch.Tensor) -> torch.Tensor:
+    def __fourier(self, coeff: torch.Tensor) -> torch.Tensor:
         """
         Calculates the Fourier approximation
         using input coefficients with shape (n_samples, 2 * order + 1, *)
@@ -120,8 +121,8 @@ class FourierFunc:
                        device=self.device) * \
             coeff[:, 0, :]
         # Get tensor of time points
-        tt = self.get_t_tensor(v_dim=v_dim,
-                               n_samples=n_samples)
+        tt = self.__get_t_tensor(v_dim=v_dim,
+                                 n_samples=n_samples)
         # Get cosine and sine part
         # Broadcasting: shape_1 * shape_2, 
         # where
@@ -144,7 +145,7 @@ class FourierFunc:
             result = result[0]
         return result
 
-    def fourier_dt(self, coeff: torch.Tensor) -> torch.Tensor:
+    def __fourier_dt(self, coeff: torch.Tensor) -> torch.Tensor:
         """
         Calculates time derivative of the Fourier approximation
         using input coefficients with shape (n_samples, 2 * order + 1, *)
@@ -156,8 +157,8 @@ class FourierFunc:
         v_dim = coeff.shape[2]
         n_samples = coeff.shape[0]
         # Get tensor of time points
-        tt = self.get_t_tensor(v_dim=v_dim,
-                               n_samples=n_samples)
+        tt = self.__get_t_tensor(v_dim=v_dim,
+                                 n_samples=n_samples)
         # Get cosine and sine part
         # Broadcasting: shape_1 * shape_2, where
         # shape_1 = (n_samples, self.order, self.t_dim, v_dim)
