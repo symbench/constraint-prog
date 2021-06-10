@@ -31,21 +31,6 @@ import sys
 
 from constraint_prog.point_cloud import PointCloud
 
-class Net(torch.nn.Module):
-    def __init__(self, n_feature, n_hidden, n_output):
-        super(Net, self).__init__()
-        self.hidden = torch.nn.Linear(n_feature, n_hidden)   # hidden layer
-        self.hidden2 = torch.nn.Linear(n_hidden, n_hidden)   # hidden layer
-        self.hidden3 = torch.nn.Linear(n_hidden, n_hidden)   # hidden layer
-        self.predict = torch.nn.Linear(n_hidden, n_output)   # output layer
-
-    def forward(self, x):
-        x1 = torch.tanh(self.hidden(x))     # activation function for hidden layer
-        x2 = torch.tanh(self.hidden2(x1))
-        x3 = torch.tanh(self.hidden3(x2))
-        x = self.predict(x3)             # linear output
-        return x
-
 def validate_net(net, data, ground_truth):
     predicted_surface = np.zeros_like(ground_truth)
     for i in range(data.shape[0]):
@@ -60,7 +45,7 @@ def validate_net(net, data, ground_truth):
 
 if __name__ == '__main__':
 
-    points = PointCloud.load(filename=os.path.join('..', 'notebooks', 'battery_packing.csv'), delimiter=';')
+    points = PointCloud.load(filename='battery_packing.csv', delimiter=';')
     points = points.prune_pareto_front(directions=[-1, -1, 0, 0, 0, 0, 1, 0])
     points.print_info()
     points = points.projection(["hull_D", "hull_L", "total_CAP"])
@@ -90,10 +75,8 @@ if __name__ == '__main__':
         torch.nn.Linear(20, 1),
     )
 
-    #net = Net(n_feature=3, n_hidden=100, n_output=1)  # define the network
     net.double()
     print(net)  # net architecture
-    #optimizer = torch.optim.SGD(net.parameters(), lr=0.01)
     optimizer = torch.optim.Adam(net.parameters(), lr=0.00001)
     loss_func = torch.nn.MSELoss()
 

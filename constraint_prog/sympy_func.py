@@ -224,6 +224,11 @@ class SympyFunc(object):
                 b = self._eval(b)
                 data[b] = a[b]
             return data
+        elif isinstance(expr, sympy.Function):
+            values = list()
+            for a in expr.args:
+                values.append(self._eval(a))
+            return expr.func(*values)
         else:
             raise ValueError(
                 "Unknown symbolic expression " + str(type(expr)))
