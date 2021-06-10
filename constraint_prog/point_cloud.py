@@ -222,8 +222,8 @@ class PointCloud:
 
         minimums = torch.tensor(minimums, device=device)
         maximums = torch.tensor(maximums, device=device)
-        float_data = torch.rand(size=(num_points, len(float_vars)),
-                                device=device)
+        float_data = torch.rand((num_points, len(float_vars)),
+                                dtype=torch.float32, device=device)
         float_data = float_data * (maximums - minimums) + minimums
         return PointCloud(float_vars=float_vars,
                           float_data=float_data)
@@ -234,12 +234,14 @@ class PointCloud:
         to the given coordinates so that the total number of points is
         num_points.
         """
+        assert len(stddev) == self.num_float_vars
         count = num_points - self.num_points
         if count <= 0:
             return
 
         indices = torch.randint(0, self.num_points, (count, ), device=self.device)
-        mutation = torch.rand(size=(count, self.num_float_vars), device=self.device)
+        mutation = torch.randn((count, self.num_float_vars),
+                               dtype=torch.float32, device=self.device)
         mutation = mutation * torch.tensor([stddev], dtype=torch.float32, device=self.device)
         new_data = self.float_data[indices] + mutation
         self.float_data = torch.cat((self.float_data, new_data), dim=0)
@@ -454,6 +456,24 @@ class PointCloud:
         ax1.set_xlabel(self.float_vars[idx1])
         ax1.set_ylabel(self.float_vars[idx2])
         plt.show()
+
+
+class PointFunc(object):
+    def __init__(self, exprs: Dict[str, sympy.Expr]):
+        self.exprs = exprs
+        self.func = SympyFunc(exprs.values())
+
+    def __call__(self, points: 'PointCloud') -> 'PointCloud':
+        input_data = []
+        for var in self.func.input_names:
+            input_data.append(points[name])
+        input_data = torch.stack(input_data, dim=-1)
+
+        self.func.device = points.device
+        output_data = self.func(input_data)
+
+        assert output_data.shape[-1] == len(self.exprs)
+        return PointCloud(self.exprs.keys(), output_data)
 
 
 if __name__ == '__main__':
