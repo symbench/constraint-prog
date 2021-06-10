@@ -57,8 +57,8 @@ def get_dynamics_equs() -> Dict[str, sympy.Expr]:
         "der_x_vel": - (thrust1 + thrust2) / mass * sympy.sin(angle),
         "der_y_vel": - EARTH_GRAVITATION + (thrust1 + thrust2) / mass * sympy.cos(angle),
         "der_a_vel": (thrust1 - thrust2) / inertia,
-        "der_err_thrust1": sympy.Max(0.0, -thrust1) + sympy.Max(0.0, thrust1 - 1.0),
-        "der_err_thrust2": sympy.Max(0.0, -thrust2) + sympy.Max(0.0, thrust2 - 1.0)
+        "der_err_thrust1": sympy.Max(0.0, -thrust1),  # + sympy.Max(0.0, thrust1 - 1.0),
+        "der_err_thrust2": sympy.Max(0.0, -thrust2)   # + sympy.Max(0.0, thrust2 - 1.0)
     }
 
 
@@ -198,12 +198,12 @@ class ErrorFunc(object):
 
 
 if __name__ == '__main__':
-    func = ErrorFunc(order=20, steps=50)
+    func = ErrorFunc(order=10, steps=100)
 
     points = PointCloud.generate(func.parameters,
                                  [-1.0] * len(func.parameters),
                                  [1.0] * len(func.parameters),
-                                 num_points=1000)
+                                 num_points=100)
 
     bounding_box = torch.zeros((2, len(func.parameters)), dtype=torch.float32)
     bounding_box[0, :] = -10
@@ -233,7 +233,6 @@ if __name__ == '__main__':
             "err_y_vel", "err_a_vel", "err_thrust1", "err_thrust2"],
         func(points.float_data))
     print(errors.float_data.pow(2.0).sum(dim=-1))
-    print()
 
     if points.num_points == 0:
         print("no solution")

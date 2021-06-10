@@ -17,7 +17,7 @@
 from collections import Counter
 import csv
 import os
-from typing import List, Union
+from typing import Dict, List, Union
 
 import matplotlib.pyplot as plt
 import numpy
