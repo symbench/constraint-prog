@@ -89,11 +89,14 @@ class PiecewiseLinearFunc:
         # right operand of disjunction: edge case, when t_i < min(x_coord[:, j]) or max(x_coord[:, j]) < t_i
         # Example for classical case:
         # ## Right endpoint:
-        # t_lt_x = [False, False, True, True, True] -> cumsum = [0, 0, 1, 2, 3]
+        # t_lt_x = [False, False, True, True, True]
+        # -> cumsum = [0, 0, 1, 2, 3]
         # -> (cumsum == 1) = [False, False, True, False, False]
         # ## Left endpoint
-        # x_lt_t = [True, True, False, False, False] -> x_lt_t.flip = [False, False, False, True, True]
-        # -> cumsum(x_lt_t.flip) = [0, 0, 0, 1, 2] -> cumsum(x_lt_t.flip).flip = [2, 1, 0, 0, 0]
+        # x_lt_t = [True, True, False, False, False]
+        # -> x_lt_t.flip = [False, False, False, True, True]
+        # -> cumsum(x_lt_t.flip) = [0, 0, 0, 1, 2]
+        # -> cumsum(x_lt_t.flip).flip = [2, 1, 0, 0, 0]
         # -> (cumsum(x_lt_t.flip).flip == 1) = [False, True, False, False, False]
         idx_x = 2
         bool_tensor_r = \
