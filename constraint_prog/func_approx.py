@@ -116,12 +116,24 @@ class PiecewiseLinearFunc:
         # [[1, 2], [1, 2], [3, 4], [5, 6]]
         # x_right_endpoints
         # [[1, 2], [3, 2], [5, 6], [5, 6]]
-        x_left_endpoints = x_coord_tensor[bool_tensor_l].reshape((self.t_dim, self.y_dim))
-        x_right_endpoints = x_coord_tensor[bool_tensor_r].reshape((self.t_dim, self.y_dim))
+        x_left_endpoints = \
+            x_coord_tensor[bool_tensor_l].reshape(
+                (self.t_dim, self.y_dim)
+            )
+        x_right_endpoints = \
+            x_coord_tensor[bool_tensor_r].reshape(
+                (self.t_dim, self.y_dim)
+            )
 
         # Get y coordinates at both endpoints
-        y_left_endpoints = y_coord_tensor[bool_tensor_l].reshape((self.t_dim, self.y_dim))
-        y_right_endpoints = y_coord_tensor[bool_tensor_r].reshape((self.t_dim, self.y_dim))
+        y_left_endpoints = \
+            y_coord_tensor[bool_tensor_l].reshape(
+                (self.t_dim, self.y_dim)
+            )
+        y_right_endpoints = \
+            y_coord_tensor[bool_tensor_r].reshape(
+                (self.t_dim, self.y_dim)
+            )
 
         # Handle situations, when left_endpoint = right_endpoint (edge cases) and
         # apply constant constant extrapolation
