@@ -2,6 +2,19 @@ import torch
 
 
 class PiecewiseLinearFunc:
+    """
+    Class for piecewise linear interpolation
+    based on points passed at construction time
+    Expected formats of points:
+    1. tensor with shape (x_dim, y_dim + 1):
+    [[x_i, y_{i, 1}, ..., y_{i, y_dim}]]
+    2. tensor with shape (2, x_dim, y_dim)
+    [[x_{i, j}], [y_{i, j}]]
+    In the first case, for interpolating different functions,
+    we use the same abscissas.
+    In the second case, more generally, the set of abscissas can be
+    different for different function
+    """
     def __init__(self, points: torch.Tensor) -> None:
         self.points = points
         # Derived member variables
@@ -15,7 +28,9 @@ class PiecewiseLinearFunc:
             # self.points has shape (x_dim, y_dim + 1)
             self.x_dim = self.points.shape[0]
             self.y_dim = self.points.shape[1] - 1
-            self.x_coord = self.points[:, 0].reshape((-1, 1)) * torch.ones(self.y_dim)
+            self.x_coord = \
+                self.points[:, 0].reshape((-1, 1)) * \
+                torch.ones(self.y_dim)
             self.y_coord = self.points[:, 1]
 
         # Other member variables
@@ -25,12 +40,25 @@ class PiecewiseLinearFunc:
         self.t_dim = None
 
     def __call__(self, t: torch.Tensor) -> torch.Tensor:
+        """
+        Function call of the class.
+        For a given tensor 't' with shape (t_dim, ),
+        the output has shape (t_dim, y_dim), where
+        output[i, j] = interpolation of the jth function evaluated at t[i]
+        If t[i] < min(x_coord[:, j]) or t[i] > max(x_coord[:, j]),
+        then constant extrapolation is applied, thus return value is
+        y_coord[0, j] or y_coord[-1, j]
+        """
         self.device = t.device
         self.t = t
         self.t_dim = torch.flatten(input=t).shape[0]
         return self.evaluate()
 
     def evaluate(self) -> torch.Tensor:
+        """
+        Return interpolation values based on self.points.
+        Output has the shape (t_dim, y_dim).
+        """
         # Apply tiling to get a tensor of shape (t_dim, x_dim, y_dim)
         # then use permutation to get shape (t_dim, y_dim, x_dim)
         # x_coord_tensor[i, j, k] = x_coord[k, j]
@@ -57,24 +85,34 @@ class PiecewiseLinearFunc:
         x_lt_t = x_coord_tensor < t_tensor
 
         # Get boolean tensors for selecting interval endpoints
-        # Example:
-        # >> x_coord = [[1, 2], [3, 4], [5, 6]]
-        # >> t = [0.2, 1.3, 4.4, 7.1]
-        # left_endpoints
-        # [[1, 2], [1, 2], [3, 4], [5, 6]]
-        # right_endpoints
-        # [[1, 2], [3, 2], [5, 6], [5, 6]]
+        # left operand of disjunction: classical case, when min(x_coord[:, j]) < t_i < max(x_coord[:, j])
+        # right operand of disjunction: edge case, when t_i < min(x_coord[:, j]) or max(x_coord[:, j]) < t_i
+        # Example for classical case:
+        # ## Right endpoint:
+        # t_lt_x = [False, False, True, True, True] -> cumsum = [0, 0, 1, 2, 3]
+        # -> (cumsum == 1) = [False, False, True, False, False]
+        # ## Left endpoint
+        # x_lt_t = [True, True, False, False, False] -> x_lt_t.flip = [False, False, False, True, True]
+        # -> cumsum(x_lt_t.flip) = [0, 0, 0, 1, 2] -> cumsum(x_lt_t.flip).flip = [2, 1, 0, 0, 0]
+        # -> (cumsum(x_lt_t.flip).flip == 1) = [False, True, False, False, False]
         idx_x = 2
         bool_tensor_r = \
             (torch.cumsum(t_lt_x, dim=idx_x) == 1).bool() | \
             ((torch.cumsum(t_lt_x, dim=idx_x) == 0).bool() &
-             (torch.cumsum(x_lt_t, dim=idx_x) == self.x_dim).bool())
+             (torch.cumsum(x_lt_t, dim=idx_x) == self.x_dim).bool())  # for right endpoints
         bool_tensor_l = \
             (torch.cumsum(x_lt_t.flip([idx_x]), dim=idx_x).flip([idx_x]) == 1).bool() | \
             ((torch.cumsum(x_lt_t.flip([idx_x]), dim=idx_x).flip([idx_x]) == 0).bool() &
-             (torch.cumsum(t_lt_x.flip([idx_x]), dim=idx_x).flip([idx_x]) == self.x_dim).bool())
+             (torch.cumsum(t_lt_x.flip([idx_x]), dim=idx_x).flip([idx_x]) == self.x_dim).bool())  # for left endpoints
 
         # Get x coordinates at both endpoints
+        # Example:
+        # >> x_coord = [[1, 2], [3, 4], [5, 6]]
+        # >> t = [0.2, 1.3, 4.4, 7.1]
+        # x_left_endpoints
+        # [[1, 2], [1, 2], [3, 4], [5, 6]]
+        # x_right_endpoints
+        # [[1, 2], [3, 2], [5, 6], [5, 6]]
         x_left_endpoints = x_coord_tensor[bool_tensor_l].reshape((self.t_dim, self.y_dim))
         x_right_endpoints = x_coord_tensor[bool_tensor_r].reshape((self.t_dim, self.y_dim))
 
