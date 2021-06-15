@@ -42,23 +42,23 @@ def get_dynamics_equs() -> Dict[str, sympy.Expr]:
     x_vel = sympy.Symbol("x_vel")  # in m/s
     y_vel = sympy.Symbol("y_vel")  # in m/s
     a_vel = sympy.Symbol("a_vel")  # in radian/s
-    trust1_err = sympy.Symbol("err_trust1")
-    trust2_err = sympy.Symbol("err_trust2")
+    thrust1_err = sympy.Symbol("err_thrust1")
+    thrust2_err = sympy.Symbol("err_thrust2")
 
     # type dependent control variables
-    trust1 = sympy.Symbol("trust1")  # in N (kg*m/s^2)
-    trust2 = sympy.Symbol("trust2")  # in N
+    thrust1 = sympy.Symbol("thrust1")  # in N (kg*m/s^2)
+    thrust2 = sympy.Symbol("thrust2")  # in N
 
     # differential equations
     return {
         "der_x_pos": x_vel,
         "der_y_pos": y_vel,
         "der_angle": a_vel,
-        "der_x_vel": - (trust1 + trust2) / mass * sympy.sin(angle),
-        "der_y_vel": - EARTH_GRAVITATION + (trust1 + trust2) / mass * sympy.cos(angle),
-        "der_a_vel": (trust1 - trust2) / inertia,
-        "der_err_trust1": sympy.Max(0.0, -trust1) + sympy.Max(0.0, trust1 - 1.0),
-        "der_err_trust2": sympy.Max(0.0, -trust2) + sympy.Max(0.0, trust2 - 1.0)
+        "der_x_vel": - (thrust1 + thrust2) / mass * sympy.sin(angle),
+        "der_y_vel": - EARTH_GRAVITATION + (thrust1 + thrust2) / mass * sympy.cos(angle),
+        "der_a_vel": (thrust1 - thrust2) / inertia,
+        "der_err_thrust1": sympy.Max(0.0, -thrust1),  # + sympy.Max(0.0, thrust1 - 1.0),
+        "der_err_thrust2": sympy.Max(0.0, -thrust2)   # + sympy.Max(0.0, thrust2 - 1.0)
     }
 
 
@@ -78,8 +78,8 @@ def get_fourier_expr(name: str, order: int) -> sympy.Expr:
 
 def get_control_exprs(order: int) -> Dict[str, sympy.Expr]:
     return {
-        "trust1": get_fourier_expr("trust1", order),
-        "trust2": get_fourier_expr("trust2", order),
+        "thrust1": get_fourier_expr("thrust1", order),
+        "thrust2": get_fourier_expr("thrust2", order),
     }
 
 
@@ -97,9 +97,9 @@ class ErrorFunc(object):
         self.parameters.remove("time")
 
         self.state_vars = ["x_pos", "y_pos", "angle", "x_vel",
-                           "y_vel", "a_vel", "err_trust1", "err_trust2"]
+                           "y_vel", "a_vel", "err_thrust1", "err_thrust2"]
         self.trace_vars = ["x_pos", "y_pos", "angle", "x_vel",
-                           "y_vel", "a_vel", "trust1", "trust2", "time"]
+                           "y_vel", "a_vel", "thrust1", "thrust2", "time"]
 
     def print_equs(self):
         print("state vars:", self.state_vars)
@@ -175,8 +175,8 @@ class ErrorFunc(object):
                                            dtype=torch.float32, device=device)
             step_data.update(self.control_func.evaluate2(self.control_exprs, step_data, True))
             if step == 0:
-                init_trust1 = step_data["trust1"]
-                init_trust2 = step_data["trust2"]
+                init_thrust1 = step_data["thrust1"]
+                init_thrust2 = step_data["thrust2"]
 
             step_data_der = self.dynamics_func.evaluate2(self.dynamics_equs, step_data, True)
 
@@ -184,26 +184,26 @@ class ErrorFunc(object):
                 step_data[name] = step_data[name] + step_data_der["der_" + name] * delta_time
 
         output_data = [
-            init_trust1 - init_trust2,
+            init_thrust1 - init_thrust2,
             step_data["x_pos"],
             step_data["y_pos"],
             step_data["angle"] - 2.0 * math.pi,
             step_data["x_vel"],
             step_data["y_vel"],
             step_data["a_vel"],
-            step_data["err_trust1"],
-            step_data["err_trust2"],
+            step_data["err_thrust1"],
+            step_data["err_thrust2"],
         ]
         return torch.stack(output_data, dim=-1)
 
 
 if __name__ == '__main__':
-    func = ErrorFunc(order=20, steps=50)
+    func = ErrorFunc(order=10, steps=100)
 
     points = PointCloud.generate(func.parameters,
                                  [-1.0] * len(func.parameters),
                                  [1.0] * len(func.parameters),
-                                 num_points=1000)
+                                 num_points=100)
 
     bounding_box = torch.zeros((2, len(func.parameters)), dtype=torch.float32)
     bounding_box[0, :] = -10
@@ -221,19 +221,18 @@ if __name__ == '__main__':
         method="mmclip")
 
     errors = PointCloud(
-        ["err_trust", "err_x_pos", "err_y_pos", "err_angle", "err_x_vel",
-            "err_y_vel", "err_a_vel", "err_trust1", "err_trust2"],
+        ["err_thrust", "err_x_pos", "err_y_pos", "err_angle", "err_x_vel",
+            "err_y_vel", "err_a_vel", "err_thrust1", "err_thrust2"],
         func(points.float_data))
     points = points.prune_by_tolerances(
         errors, [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
     # print(points.float_data)
 
     errors = PointCloud(
-        ["err_trust", "err_x_pos", "err_y_pos", "err_angle", "err_x_vel",
-            "err_y_vel", "err_a_vel", "err_trust1", "err_trust2"],
+        ["err_thrust", "err_x_pos", "err_y_pos", "err_angle", "err_x_vel",
+            "err_y_vel", "err_a_vel", "err_thrust1", "err_thrust2"],
         func(points.float_data))
     print(errors.float_data.pow(2.0).sum(dim=-1))
-    print()
 
     if points.num_points == 0:
         print("no solution")
