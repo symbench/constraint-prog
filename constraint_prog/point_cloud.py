@@ -466,7 +466,7 @@ class PointFunc(object):
     def __call__(self, points: 'PointCloud') -> 'PointCloud':
         input_data = []
         for var in self.func.input_names:
-            input_data.append(points[name])
+            input_data.append(points[var])
         input_data = torch.stack(input_data, dim=-1)
 
         self.func.device = points.device
