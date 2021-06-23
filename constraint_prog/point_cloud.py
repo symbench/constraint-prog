@@ -230,7 +230,7 @@ class PointCloud:
 
     def add_mutations(self, stddev: List[float], num_points: int):
         """
-        Take random elements from the point cloud and add random permutations
+        Take random elements from the point cloud and add random mutations
         to the given coordinates so that the total number of points is
         num_points.
         """
