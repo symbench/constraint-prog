@@ -16,42 +16,40 @@
 
 from typing import Dict, Tuple
 
-import math
 import sympy
 
 
 class RelativePos:
     """
-    This represents a relative position of one component inside another.
-    Each component has its own natural origin point (which is usually
-    not the center of its gravity).
+    This represents a relative position of one component inside another. Each
+    component has its own origin, which is usually its geometric center.
     """
 
     def __init__(self, name: str):
         self.name = name
 
-        self.pos_x = sympy.Symbol(name + "_pos_x")  # in m
-        self.pos_y = sympy.Symbol(name + "_pos_y")  # in m
-        self.pos_z = sympy.Symbol(name + "_pos_z")  # in m
+        self.x = sympy.Symbol(name + "_x")  # in m
+        self.y = sympy.Symbol(name + "_y")  # in m
+        self.z = sympy.Symbol(name + "_z")  # in m
 
-        self.pos_x_bounds = (-1e30, 1e30)
-        self.pos_y_bounds = (-1e30, 1e30)
-        self.pos_z_bounds = (-1e30, 1e30)
+        self.x_bounds = (-1e30, 1e30)
+        self.y_bounds = (-1e30, 1e30)
+        self.z_bounds = (-1e30, 1e30)
 
     @property
     def variables(self) -> Dict[str, sympy.Expr]:
         return {
-            self.name + "_pos_x": self.pos_x,
-            self.name + "_pos_y": self.pos_y,
-            self.name + "_pos_z": self.pos_z,
+            self.name + "_x": self.x,
+            self.name + "_y": self.y,
+            self.name + "_z": self.z,
         }
 
     @property
     def bounds(self) -> Dict[str, Tuple[float, float]]:
         return {
-            self.name + "_pos_x": self.pos_x_bounds,
-            self.name + "_pos_y": self.pos_y_bounds,
-            self.name + "_pos_z": self.pos_z_bounds,
+            self.name + "_x": self.x_bounds,
+            self.name + "_y": self.y_bounds,
+            self.name + "_z": self.z_bounds,
         }
 
 
@@ -73,6 +71,10 @@ class CapsuleShape:
         self.length_bounds = (0.0, 1e30)
 
     @property
+    def volume(self) -> sympy.Expr:
+        return sympy.pi * self.radius ** 2 * (4 * self.radius / 3 + self.length)
+
+    @property
     def variables(self) -> Dict[str, sympy.Expr]:
         return {
             self.name + "_radius": self.radius,
@@ -86,19 +88,95 @@ class CapsuleShape:
             self.name + "_length": self.length_bounds,
         }
 
+    def draw(self, turtle):
+        """
+        We assume that the variables are concrete numbers and we draw the 
+        capsule shape at the current turtle position.
+        """
+        pos = turtle.position()
+        turtle.penup()
+        turtle.setheading(270)
+        turtle.forward(self.radius)
+        turtle.setheading(0)
+        turtle.pendown()
+        turtle.forward(self.length * 0.5)
+        turtle.circle(self.radius, 180)
+        turtle.forward(self.length)
+        turtle.circle(self.radius, 180)
+        turtle.forward(self.length * 0.5)
+        turtle.penup()
+        turtle.goto(pos)
 
-def is_capsule_inside_another(capsule1: 'CapsuleShape', capsule2: 'CapsuleShape',
-                              relpos2: 'RelativePos') -> Dict[str, sympy.Expr]:
-    """
-    Returns a dictionary of differentiable constraints expressing the fact
-    capsule1 contains capsule2.
-    """
-    pass
+    def contains_point(self, relpos: 'RelativePos') -> Dict[str, sympy.Expr]:
+        """
+        Returns a dictionary of differentiable constraints expressing the fact
+        that the given relative position is inside of this capsule.
+        """
+        relx = sympy.Max(0.0, sympy.Abs(relpos.x) - self.length * 0.5)
+        dist = relx ** 2 + relpos.y ** 2 + relpos.z ** 2
+        return {
+            self.name + "_contains_" + relpos.name:
+                dist <= self.radius ** 2
+        }
+
+    def excludes_point(self, relpos: 'RelativePos') -> Dict[str, sympy.Expr]:
+        """
+        Returns a dictionary of differentiable constraints expressing the fact
+        that the given relative position is outside of this capsule.
+        """
+        relx = sympy.Max(0.0, sympy.Abs(relpos.x) - self.length * 0.5)
+        dist = relx ** 2 + relpos.y ** 2 + relpos.z ** 2
+        return {
+            self.name + "_excludes_" + relpos.name:
+                dist >= self.radius ** 2
+        }
+
+    def contains_capsule(self, capsule: 'CapsuleShape',
+                         relpos: 'RelativePos') -> Dict[str, sympy.Expr]:
+        """
+        Returns a dictionary of differentiable constraints expressing the fact
+        the given capsule at the relative position is fully inside this
+        capsule.
+        """
+        relx = sympy.Max(0.0, sympy.Abs(relpos.x) + (capsule.length - self.length) * 0.5)
+        dist = relx ** 2 + relpos.y ** 2 + relpos.z ** 2
+        return {
+            self.name + "_contains_" + capsule.name + "_at_" + relpos.name:
+                dist <= (self.radius - capsule.radius) ** 2
+        }
+
+    def excludes_capsule(self, capsule: 'CapsuleShape',
+                         relpos: 'RelativePos') -> Dict[str, sympy.Expr]:
+        """
+        Returns a dictionary of differentiable constraints expressing the fact
+        the given capsule at the relative position is fully outside of this
+        capsule.
+        """
+        relx = sympy.Max(0.0, sympy.Abs(relpos.x) - (capsule.length + self.length) * 0.5)
+        dist = relx ** 2 + relpos.y ** 2 + relpos.z ** 2
+        return {
+            self.name + "_excludes_" + capsule.name + "_at_" + relpos.name:
+                dist >= (self.radius + capsule.radius) ** 2
+        }
 
 
 if __name__ == "__main__":
     capsule1 = CapsuleShape("capsule1")
+    capsule1.radius = 50
+    capsule1.length = 100
     capsule2 = CapsuleShape("capsule2")
-    relpos2 = RelativePos("capsule2")
-    print(capsule1.bounds)
-    print(relpos2.variables)
+    capsule2.radius = 10
+    capsule2.length = 20
+    relpos2 = RelativePos("relpos2")
+    relpos2.x = 105
+    relpos2.y = 40
+    relpos2.z = 0
+    print(capsule1.excludes_capsule(capsule2, relpos2))
+
+    import turtle
+    t = turtle.Turtle()
+    t.speed(0)
+    capsule1.draw(t)
+    t.goto(relpos2.x, relpos2.y)
+    capsule2.draw(t)
+    turtle.done()
