@@ -15,8 +15,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from typing import Dict, Tuple
-
+import math
 import sympy
+
+from constraint_prog.point_cloud import PointCloud, PointFunc
 
 
 class RelativePos:
@@ -32,9 +34,9 @@ class RelativePos:
         self.y = sympy.Symbol(name + "_y")  # in m
         self.z = sympy.Symbol(name + "_z")  # in m
 
-        self.x_bounds = (-1e30, 1e30)
-        self.y_bounds = (-1e30, 1e30)
-        self.z_bounds = (-1e30, 1e30)
+        self.x_bounds = (-math.inf, math.inf)
+        self.y_bounds = (-math.inf, math.inf)
+        self.z_bounds = (-math.inf, math.inf)
 
     @property
     def variables(self) -> Dict[str, sympy.Expr]:
@@ -67,8 +69,8 @@ class CapsuleShape:
         self.radius = sympy.Symbol(name + "_radius")  # in m
         self.length = sympy.Symbol(name + "_length")  # in m
 
-        self.radius_bounds = (0.0, 1e30)
-        self.length_bounds = (0.0, 1e30)
+        self.radius_bounds = (0.0, math.inf)
+        self.length_bounds = (0.0, math.inf)
 
     @property
     def volume(self) -> sympy.Expr:
@@ -160,7 +162,7 @@ class CapsuleShape:
         }
 
 
-if __name__ == "__main__":
+def test_equations():
     capsule1 = CapsuleShape("capsule1")
     capsule1.radius = 50
     capsule1.length = 100
@@ -180,3 +182,58 @@ if __name__ == "__main__":
     t.goto(relpos2.x, relpos2.y)
     capsule2.draw(t)
     turtle.done()
+
+
+def test_newton_raphson():
+    c0 = CapsuleShape("c0")
+    c0.radius_bounds = (1.0, 2.0)
+    c0.length_bounds = (5.0, 15.0)
+
+    c1 = CapsuleShape("c1")
+    c1.radius_bounds = (0.0, 2.0)
+    c1.length_bounds = (0.0, 15.0)
+
+    c2 = CapsuleShape("c2")
+    c2.radius_bounds = (0.0, 2.0)
+    c2.length_bounds = (0.0, 15.0)
+
+    p1 = RelativePos("p1")
+    p1.x_bounds = (-20.0, 20.0)
+    p1.y_bounds = (-2.0, 2.0)
+    p1.z_bounds = (-2.0, 2.0)
+
+    p2 = RelativePos("p2")
+    p2.x_bounds = (-20.0, 20.0)
+    p2.y_bounds = (-2.0, 2.0)
+    p2.z_bounds = (-2.0, 2.0)
+
+    bounds = dict()
+    bounds.update(c0.bounds)
+    bounds.update(c1.bounds)
+    bounds.update(c2.bounds)
+    bounds.update(p1.bounds)
+    bounds.update(p2.bounds)
+    print(bounds)
+
+    constraints = dict()
+    constraints.update(c0.contains_capsule(c1, p1))
+    constraints.update(c0.contains_capsule(c2, p2))
+
+    p12 = RelativePos("p12")
+    p12.x = p2.x - p1.x
+    p12.y = p2.y - p1.y
+    p12.z = p2.z - p1.z
+    constraints.update(c1.excludes_capsule(c2, p12))
+    print(constraints)
+
+    points = PointCloud.generate(bounds, 1000)
+    points.print_info()
+    print(points.float_data)
+
+    func = PointFunc(constraints)
+    errors = func(points)
+    print(errors.float_data)
+
+
+if __name__ == "__main__":
+    test_newton_raphson()
