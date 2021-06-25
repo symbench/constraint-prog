@@ -200,10 +200,8 @@ class ErrorFunc(object):
 if __name__ == '__main__':
     func = ErrorFunc(order=10, steps=100)
 
-    points = PointCloud.generate(func.parameters,
-                                 [-1.0] * len(func.parameters),
-                                 [1.0] * len(func.parameters),
-                                 num_points=100)
+    points = PointCloud.generate({var: (-1.0, 1.0) for var in func.parameters},
+                                  num_points=100)
 
     bounding_box = torch.zeros((2, len(func.parameters)), dtype=torch.float32)
     bounding_box[0, :] = -10

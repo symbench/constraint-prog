@@ -17,7 +17,7 @@
 from collections import Counter
 import csv
 import os
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Tuple
 
 import matplotlib.pyplot as plt
 import numpy
@@ -210,22 +210,19 @@ class PointCloud:
             raise ValueError("invalid filename extension")
 
     @staticmethod
-    def generate(float_vars: List[str],
-                 minimums: List[float], maximums: List[float],
+    def generate(bounds: Dict[str, Tuple[float, float]],
                  num_points: int, device='cpu') -> 'PointCloud':
         """
         Creates a new point cloud with the given number of points and
         bounding box with uniform distribution.
         """
-        assert len(float_vars) == len(minimums)
-        assert len(float_vars) == len(maximums)
 
-        minimums = torch.tensor(minimums, device=device)
-        maximums = torch.tensor(maximums, device=device)
-        float_data = torch.rand((num_points, len(float_vars)),
+        minimums = torch.tensor([val[0] for val in bounds.values()], device=device)
+        maximums = torch.tensor([val[1] for val in bounds.values()], device=device)
+        float_data = torch.rand((num_points, len(bounds)),
                                 dtype=torch.float32, device=device)
         float_data = float_data * (maximums - minimums) + minimums
-        return PointCloud(float_vars=float_vars,
+        return PointCloud(float_vars=bounds.keys(),
                           float_data=float_data)
 
     def add_mutations(self, stddev: List[float], num_points: int):
@@ -466,7 +463,7 @@ class PointFunc(object):
     def __call__(self, points: 'PointCloud') -> 'PointCloud':
         input_data = []
         for var in self.func.input_names:
-            input_data.append(points[name])
+            input_data.append(points[var])
         input_data = torch.stack(input_data, dim=-1)
 
         self.func.device = points.device
@@ -490,7 +487,7 @@ if __name__ == '__main__':
 
     points = PointCloud.load(filename='elliptic_curve.npz')
     points = points.projection(["x", "y"])
-    # points = PointCloud.generate(["x", "y"], [0, 0], [1, 1], 1000)
+    # points = PointCloud.generate({"x": (0.0, 1.0), "y": (0.0, 1.0)}, 1000)
     points.print_info()
 
     points2 = PointCloud(float_vars=points.float_vars,

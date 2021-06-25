@@ -170,10 +170,10 @@ class Explorer:
         Runs exploration w.r.t. the given constraints
         """
         # Generate sample points
-        sample_data = PointCloud.generate(float_vars=self.func.input_names,
-                                          minimums=self.constraints_min,
-                                          maximums=self.constraints_max,
-                                          num_points=self.max_points)
+        sample_data = PointCloud.generate(
+            {var: (self.constraints_min[idx], self.constraints_max[idx])
+             for idx, var in enumerate(self.func.input_names)},
+            num_points=self.max_points)
         print("Running {} method on {} many design points".format(
             self.method, sample_data.num_points))
 
