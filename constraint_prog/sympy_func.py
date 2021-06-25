@@ -190,6 +190,10 @@ class SympyFunc(object):
             assert len(expr.args) == 1
             value0 = self._eval(expr.args[0])
             return torch.exp(value0)
+        elif expr.func == sympy.Abs:
+            assert len(expr.args) == 1
+            value0 = self._eval(expr.args[0])
+            return torch.abs(value0)
         elif expr.func == sympy.Eq:
             assert len(expr.args) == 2
             value0 = self._eval(expr.args[0])

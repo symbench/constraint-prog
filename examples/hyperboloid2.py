@@ -41,7 +41,7 @@ def main():
     variables = ["x" + str(i) for i in range(dim)]
     minimums = [0.0] * dim
     maximums = [4.0] * dim
-    points = PointCloud.generate(variables, minimums, maximums, num)
+    points = PointCloud.generate({var: (0.0, 4.0) for var in variables}, num)
     print("random designs:", points.float_data.shape)
 
     # manually call the newton raphson optimization
