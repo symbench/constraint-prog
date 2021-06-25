@@ -16,6 +16,7 @@
 
 from collections import Counter
 import csv
+import math
 import os
 from typing import Dict, List, Union, Tuple
 
@@ -25,6 +26,7 @@ import sympy
 import torch
 
 from constraint_prog.sympy_func import SympyFunc
+from constraint_prog.newton_raphson import newton_raphson
 
 
 class PointCloud:
@@ -177,7 +179,7 @@ class PointCloud:
                 except ValueError:
                     string_data.append(col)
                     string_vars.append(header)
-            float_data = torch.tensor(numpy.array(float_data).T)
+            float_data = torch.tensor(numpy.array(float_data).T, dtype=torch.float32)
 
             if len(string_vars) < 1:
                 string_vars, string_data = None, None
@@ -217,13 +219,40 @@ class PointCloud:
         bounding box with uniform distribution.
         """
 
-        minimums = torch.tensor([val[0] for val in bounds.values()], device=device)
-        maximums = torch.tensor([val[1] for val in bounds.values()], device=device)
+        minimums = torch.tensor([val[0] for val in bounds.values()],
+                                dtype=torch.float32, device=device)
+        maximums = torch.tensor([val[1] for val in bounds.values()],
+                                dtype=torch.float32, device=device)
         float_data = torch.rand((num_points, len(bounds)),
                                 dtype=torch.float32, device=device)
         float_data = float_data * (maximums - minimums) + minimums
         return PointCloud(float_vars=bounds.keys(),
                           float_data=float_data)
+
+    def newton_raphson(self, func: 'PointFunc',
+                       bounds: Dict[str, Tuple[float, float]],
+                       num_iter: int = 10, epsilon: float = 1e-3) \
+            -> 'PointCloud':
+        """
+        Performs the Newton-Raphson optimization on the point cloud where
+        the give func specifies the constraints that need to become zero,
+        and returns a new point cloud with the result.
+        """
+        input_data = torch.empty((self.num_points, len(func.input_names)),
+                                 dtype=torch.float32, device=self.device)
+        bounding_box = torch.empty((2, len(func.input_names)),
+                                   dtype=torch.float32, device=self.device)
+        for idx, var in enumerate(func.input_names):
+            input_data[:, idx] = self[var]
+            bound = bounds.get(var, (-math.inf, math.inf))
+            bounding_box[0, idx] = bound[0]
+            bounding_box[1, idx] = bound[1]
+
+        input_data = newton_raphson(func, input_data,
+                                    num_iter=num_iter, epsilon=epsilon,
+                                    bounding_box=bounding_box, method="mmclip")
+
+        return PointCloud(func.input_names, input_data)
 
     def add_mutations(self, stddev: List[float], num_points: int):
         """
@@ -239,7 +268,8 @@ class PointCloud:
         indices = torch.randint(0, self.num_points, (count, ), device=self.device)
         mutation = torch.randn((count, self.num_float_vars),
                                dtype=torch.float32, device=self.device)
-        mutation = mutation * torch.tensor([stddev], dtype=torch.float32, device=self.device)
+        mutation = mutation * torch.tensor([stddev],
+                                           dtype=torch.float32, device=self.device)
         new_data = self.float_data[indices] + mutation
         self.float_data = torch.cat((self.float_data, new_data), dim=0)
 
@@ -264,7 +294,7 @@ class PointCloud:
         """
         assert keep >= 1 and len(resolutions) == self.num_float_vars
 
-        resolutions = torch.tensor(list(resolutions))
+        resolutions = torch.tensor(resolutions, dtype=torch.float32)
         multiplier = resolutions.clamp(min=0.0)
         indices = multiplier > 0.0
         multiplier[indices] = 1.0 / multiplier[indices]
@@ -304,8 +334,10 @@ class PointCloud:
         """
         assert len(minimums) == self.num_float_vars and len(maximums) == self.num_float_vars
 
-        sel1 = self.float_data >= torch.tensor(minimums, device=self.device)
-        sel2 = self.float_data <= torch.tensor(maximums, device=self.device)
+        minimums = torch.tensor(minimums, dtype=torch.float32, device=self.device)
+        maximums = torch.tensor(maximums, dtype=torch.float32, device=self.device)
+        sel1 = self.float_data >= minimums
+        sel2 = self.float_data <= maximums
         sel3 = torch.logical_and(sel1, sel2).all(dim=1)
 
         return PointCloud(float_vars=self.float_vars,
@@ -323,8 +355,8 @@ class PointCloud:
         """
         assert len(tolerances) == magnitudes.num_float_vars
         assert self.num_points == magnitudes.num_points
-        sel = magnitudes.float_data.abs() <= torch.tensor(tolerances, device=self.device)
-        sel = sel.all(dim=1)
+        tolerances = torch.tensor(tolerances, dtype=torch.float32, device=self.device)
+        sel = (magnitudes.float_data.abs() <= tolerances).all(dim=1)
         return PointCloud(float_vars=self.float_vars,
                           float_data=self.float_data[sel],
                           string_vars=self.string_vars,
@@ -460,56 +492,44 @@ class PointFunc(object):
         self.exprs = exprs
         self.func = SympyFunc(exprs.values())
 
-    def __call__(self, points: 'PointCloud') -> 'PointCloud':
-        input_data = []
-        for var in self.func.input_names:
-            input_data.append(points[var])
-        input_data = torch.stack(input_data, dim=-1)
+    @property
+    def input_names(self):
+        """
+        Returns the list of variable names for the input tensor.
+        """
+        return self.func.input_names
 
-        self.func.device = points.device
+    @property
+    def output_names(self):
+        """
+        Returns the list of variable names for the output tensor.
+        """
+        return self.exprs.keys()
+
+    def __call__(self, points: Union['PointCloud', torch.Tensor]) \
+            -> Union['PointCloud', torch.Tensor]:
+        """
+        Evaluates the given list of expressions for the given point
+        cloud or tensor and returns the result in the same format.
+        """
+        if isinstance(points, torch.Tensor):
+            assert points.ndim == 2 and points.shape[1] == len(self.input_names)
+            input_data = points
+        else:
+            input_data = []
+            for var in self.input_names:
+                input_data.append(points[var])
+            input_data = torch.stack(input_data, dim=-1)
+
+        self.func.device = points.device  # works for both input types
         output_data = self.func(input_data)
 
-        assert output_data.shape[-1] == len(self.exprs)
-        return PointCloud(self.exprs.keys(), output_data)
+        assert output_data.shape[-1] == len(self.output_names)
 
+        if isinstance(points, torch.Tensor):
+            return output_data
+        else:
+            return PointCloud(self.output_names, output_data)
 
-if __name__ == '__main__':
-    if False:
-        points = PointCloud.load(filename='elliptic_curve.npz')
-        points.print_info()
-        points.plot2d(0, 1)
-        points = points.prune_close_points(resolutions=[0.1, 0.0, 0.1],
-                                           keep=10)
-        points.print_info()
-        points = points.prune_bounding_box(minimums=[-1, -1, -1],
-                                           maximums=[1, 2, 3])
-        points.print_info()
-
-    points = PointCloud.load(filename='elliptic_curve.npz')
-    points = points.projection(["x", "y"])
-    # points = PointCloud.generate({"x": (0.0, 1.0), "y": (0.0, 1.0)}, 1000)
-    points.print_info()
-
-    points2 = PointCloud(float_vars=points.float_vars,
-                         float_data=points.float_data)
-
-    x = sympy.Symbol("x")
-    y = sympy.Symbol("y")
-    points = points.evaluate(variables=["x", "y"],
-                             expressions=[x, y])
-    # points.print_info()
-    points = points.prune_pareto_front(directions=[-1.0, -1.0])
-    points.print_info()
-    points.plot2d(0, 1)
-
-    xpos = torch.linspace(-2.0, 2.0, 50)
-    ypos = torch.linspace(-2.0, 0.0, 50)
-    mesh = torch.stack(torch.meshgrid(xpos, ypos), dim=-1)
-    dist = points.get_pareto_distance(directions=[-1, -1], points=mesh)
-
-    fig, ax1 = plt.subplots(subplot_kw={"projection": "3d"})
-    ax1.plot_surface(
-        mesh[:, :, 0].numpy(),
-        mesh[:, :, 1].numpy(),
-        dist.numpy())
-    plt.show()
+    def __repr__(self):
+        return self.exprs.__repr__()

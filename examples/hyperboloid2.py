@@ -14,46 +14,39 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import sympy
 import torch
 
-from constraint_prog.point_cloud import PointCloud
-from constraint_prog.newton_raphson import newton_raphson
-
-
-def constraints(designs: torch.Tensor) -> torch.Tensor:
-    """
-    Takes a tensor of shape [*,dim] and returns a tensor of shape [*,2].
-    We use direct pytorch computation, could have used sympy too.
-    """
-    dim = designs.shape[-1]
-    zero = torch.zeros((), dtype=designs.dtype, device=designs.device)
-    err1 = 1.0 - torch.prod(designs, dim=-1)
-    err2 = torch.sum(designs, dim=-1) - (dim + 1.0)
-    # the error values should be negative, so we clamp it
-    return torch.stack((err1, err2), dim=-1).clamp_min(0.0)
+from constraint_prog.point_cloud import PointCloud, PointFunc
 
 
 def main():
     dim = 10
     num = 1000  # number of simultaneous designs
 
+    # create the constraint expressions
+    expr1 = 1
+    expr2 = 0
+    for i in range(dim):
+        symb = sympy.Symbol("x" + str(i))
+        expr1 = expr1 * symb
+        expr2 = expr2 + symb
+    constraints = PointFunc({
+        "prod_err": expr1 >= 1.0,
+        "sum_err": expr2 <= dim + 1.0,
+    })
+    print(constraints)
+
     # generate random data points in bounding box
-    variables = ["x" + str(i) for i in range(dim)]
-    minimums = [0.0] * dim
-    maximums = [4.0] * dim
-    points = PointCloud.generate({var: (0.0, 4.0) for var in variables}, num)
+    bounds = {var: (0.0, 4.0) for var in constraints.input_names}
+    points = PointCloud.generate(bounds, num)
     print("random designs:", points.float_data.shape)
 
-    # manually call the newton raphson optimization
-    points.float_data = newton_raphson(
-        constraints,
-        points.float_data,
-        num_iter=10,
-        bounding_box=torch.tensor([minimums, maximums], dtype=torch.float32),
-        method="mmclip")
+    # solve the constraints and update points
+    points = points.newton_raphson(constraints, bounds)
 
-    # manually calculate the final errors
-    errors = PointCloud(["prod_err", "sum_err"], constraints(points.float_data))
+    # calculate the errors and prune points
+    errors = constraints(points)
     points = points.prune_by_tolerances(errors, [1e-5, 1e-5])
     print("feasible designs: ", points.float_data.shape)
 
@@ -73,16 +66,11 @@ def main():
         points.add_mutations([0.1] * dim, num)
         # points.plot2d(0, 1)
 
-        # manually call the newton raphson optimization
-        points.float_data = newton_raphson(
-            constraints,
-            points.float_data,
-            num_iter=10,
-            bounding_box=torch.tensor([minimums, maximums], dtype=torch.float32),
-            method="mmclip")
+        # solve the constraints and update points
+        points = points.newton_raphson(constraints, bounds)
 
-        # manually calculate the final errors
-        errors = PointCloud(["prod_err", "sum_err"], constraints(points.float_data))
+        # calculate the errors and prune points
+        errors = constraints(points)
         points = points.prune_by_tolerances(errors, [1e-5, 1e-5])
         # points.plot2d(0, 1)
 
