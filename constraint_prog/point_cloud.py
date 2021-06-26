@@ -229,6 +229,21 @@ class PointCloud:
         return PointCloud(float_vars=bounds.keys(),
                           float_data=float_data)
 
+    @staticmethod
+    def mesh_grid(ranges: Dict[str, Tuple[float, float, int]],
+                  device='cpu') -> 'PointCloud':
+        """
+        Creates a new mesh grid point cloud with the given parameters.
+        """
+
+        coords = [torch.linspace(a, b, c, dtype=torch.float32, device=device)
+                  for (a, b, c) in ranges.values()]
+        coords = torch.meshgrid(*coords)
+        coords = [torch.flatten(c) for c in coords]
+        coords = torch.stack(coords, dim=-1)
+
+        return PointCloud(float_vars=ranges.keys(), float_data=coords)
+
     def newton_raphson(self, func: 'PointFunc',
                        bounds: Dict[str, Tuple[float, float]],
                        num_iter: int = 10, epsilon: float = 1e-3) \
