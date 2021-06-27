@@ -54,6 +54,13 @@ class RelativePos:
             self.name + "_z": self.z_bounds,
         }
 
+    def minus(self, other: 'RelativePos') -> 'RelativePos':
+        result = RelativePos(self.name + "_minus_" + other.name)
+        result.x = self.x - other.x
+        result.y = self.y - other.y
+        result.z = self.z - other.z
+        return result
+
 
 class CapsuleShape:
     """
@@ -92,7 +99,7 @@ class CapsuleShape:
 
     def draw(self, turtle):
         """
-        We assume that the variables are concrete numbers and we draw the 
+        We assume that the variables are concrete numbers and we draw the
         capsule shape at the current turtle position.
         """
         pos = turtle.position()
@@ -218,21 +225,23 @@ def test_newton_raphson():
     constraints = dict()
     constraints.update(c0.contains_capsule(c1, p1))
     constraints.update(c0.contains_capsule(c2, p2))
-
-    p12 = RelativePos("p12")
-    p12.x = p2.x - p1.x
-    p12.y = p2.y - p1.y
-    p12.z = p2.z - p1.z
-    constraints.update(c1.excludes_capsule(c2, p12))
+    constraints.update(c1.excludes_capsule(c2, p2.minus(p1)))
     print(constraints)
 
-    points = PointCloud.generate(bounds, 1000)
-    points.print_info()
-    print(points.float_data)
-
+    num_points = 10000
+    points = PointCloud.generate(bounds, num_points)
     func = PointFunc(constraints)
-    errors = func(points)
-    print(errors.float_data)
+
+    for _ in range(10):
+        points.add_mutations([0.5] * len(bounds), num_points)
+
+        points = points.newton_raphson(func, bounds)
+
+        errors = func(points)
+        points = points.prune_by_tolerances(errors, 1e-5)
+
+        points = points.prune_close_points([2.0] * len(bounds))
+        print(points.num_points)
 
 
 if __name__ == "__main__":

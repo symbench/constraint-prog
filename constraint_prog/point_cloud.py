@@ -360,18 +360,21 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data[sel3])
 
-    def prune_by_tolerances(self, magnitudes: 'PointCloud',
-                            tolerances: List[float]) -> 'PointCloud':
+    def prune_by_tolerances(self, errors: 'PointCloud',
+                            tolerances: Union[Dict[str, float], float]) -> 'PointCloud':
         """
-        Returns those points where the given magnitudes are smaller in absolute
-        value than the given tolerances. The length of tolerances must be
-        the number of variables of magnitudes, and the the number of points
-        of magniteds must match that of this point cloud.
+        Returns those points where the given error magnitudes are smaller 
+        in absolute value than the given tolerances. The tolerances 
+        dictionary must contain a value for each error magnitude names or
+        it must be a float value which is applied for all errors.
         """
-        assert len(tolerances) == magnitudes.num_float_vars
-        assert self.num_points == magnitudes.num_points
+        assert self.num_points == errors.num_points
+        if isinstance(tolerances, float):
+            tolerances = [tolerances for _ in errors.float_vars]
+        else:
+            tolerances = [tolerances[var] for var in errors.float_vars]
         tolerances = torch.tensor(tolerances, dtype=torch.float32, device=self.device)
-        sel = (magnitudes.float_data.abs() <= tolerances).all(dim=1)
+        sel = (errors.float_data.abs() <= tolerances).all(dim=1)
         return PointCloud(float_vars=self.float_vars,
                           float_data=self.float_data[sel],
                           string_vars=self.string_vars,

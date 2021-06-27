@@ -56,7 +56,7 @@ def main_pareto():
 
         # calculate the errors and prune points
         errors = constraints(points)
-        points = points.prune_by_tolerances(errors, [1e-5, 1e-5])
+        points = points.prune_by_tolerances(errors, 1e-5)
         # points.plot2d(0, 1)
 
         # prune pareto front and plot it again

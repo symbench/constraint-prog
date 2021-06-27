@@ -201,7 +201,7 @@ if __name__ == '__main__':
     func = ErrorFunc(order=10, steps=100)
 
     points = PointCloud.generate({var: (-1.0, 1.0) for var in func.parameters},
-                                  num_points=100)
+                                 num_points=100)
 
     bounding_box = torch.zeros((2, len(func.parameters)), dtype=torch.float32)
     bounding_box[0, :] = -10
@@ -222,8 +222,7 @@ if __name__ == '__main__':
         ["err_thrust", "err_x_pos", "err_y_pos", "err_angle", "err_x_vel",
             "err_y_vel", "err_a_vel", "err_thrust1", "err_thrust2"],
         func(points.float_data))
-    points = points.prune_by_tolerances(
-        errors, [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
+    points = points.prune_by_tolerances(errors, 0.01)
     # print(points.float_data)
 
     errors = PointCloud(
