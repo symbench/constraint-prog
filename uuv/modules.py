@@ -31,22 +31,14 @@ class Module():
     def volume(self):
         return self.shape.volume
 
-
-class DryModule(Module):
-    def __init__(self, name: str, shape: 'Shape', dry_mass: sympy.Expr):
-        super(FloatModule, self).__init__(name, shape)
-        self.dry_mass = dry_mass
+    @property
+    def displacement(self):
+        return self.volume * materials.SEA_WATER.density
 
 
-class WetModule(Module):
-    def __init__(self, name: str, shape: 'Shape', dry_mass: sympy.Expr):
-        super(FloatModule, self).__init__(name, shape)
-        self.dry_mass = dry_mass
-
-
-class BladderModule(Module):
+class BuoyancyModule(Module):
     def __init__(self, name: str, shape: 'Cylinder', material: 'Material'):
-        super(BladderModule, self).__init__(name, shape)
+        super(BuoyancyModule, self).__init__(name, shape)
         self.material = material
 
     @property
@@ -64,9 +56,44 @@ class FloatModule(Module):
         return self.volume * self.material.density
 
 
+class WetModule(Module):
+    def __init__(self, name: str, dry_mass: sympy.Expr):
+        super(WetModule, self).__init__(name, shapes.Point())
+        self.dry_mass = dry_mass
+
+
+class DryModule(Module):
+    def __init__(self, name: str, dry_mass: sympy.Expr):
+        super(DryModule, self).__init__(name, shapes.Point())
+        self.dry_mass = dry_mass
+
+
+class PressureVessel(Module):
+    def __init__(self, name: str, dry_mass: sympy.Expr,
+                 outer_radius: sympy.Expr, inner_radius: sympy.Expr):
+        super(PressureVessel, self).__init__(name, )
+        self.dry_mass = dry_mass
+
+
+class SimpleVehicle(Module):
+    def __init__(self, name: str, shape: 'Cylinder'):
+
+        self.float1 = FloatModule(
+            "float1",
+            shapes.CylinderSymb("float1"),
+            materials.FOAM_BZ_26)
+
+        self.battery1 = PressureVessel(
+            "battery1")
+
+        self.buoyancy1 = BuoyancyModule(
+            "bouyancy1",
+            shapes.CylinderSymb("float1"))
+
+
 if __name__ == '__main__':
     flo1 = FloatModule(
         "FLO1",
-        shapes.CylinderExpr("FLO1", 0.15, 0.25),
+        shapes.Cylinder("FLO1", 0.15, 0.25),
         materials.FOAM_BZ_26)
     print(float(flo1.dry_mass))
