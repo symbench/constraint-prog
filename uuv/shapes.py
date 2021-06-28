@@ -24,7 +24,7 @@ class Shape():
         self.name = name
         self.bounds = dict()
 
-    def _symbol(self, name: str, spec: Union[sympy.Expr, Tuple[float, float]]) \
+    def add_param(self, name: str, spec: Union[sympy.Expr, Tuple[float, float]]) \
             -> sympy.Expr:
         if not isinstance(spec, tuple):
             return spec
@@ -59,7 +59,7 @@ class Sphere(Shape):
     def __init__(self, name: str,
                  radius: Union[sympy.Expr, Tuple[float, float]]):
         super(Sphere, self).__init__(name)
-        self.radius = self._symbol("radius", radius)
+        self.radius = self.add_param("radius", radius)
 
     @property
     def volume(self) -> sympy.Expr:
@@ -83,8 +83,8 @@ class Cylinder(Shape):
                  radius: Union[sympy.Expr, Tuple[float, float]],
                  length: Union[sympy.Expr, Tuple[float, float]]):
         super(Cylinder, self).__init__(name)
-        self.radius = self._symbol("radius", radius)
-        self.length = self._symbol("length", length)
+        self.radius = self.add_param("radius", radius)
+        self.length = self.add_param("length", length)
 
     @property
     def volume(self) -> sympy.Expr:
@@ -105,8 +105,8 @@ class Capsule(Shape):
                  radius: Union[sympy.Expr, Tuple[float, float]],
                  cylinder_length: Union[sympy.Expr, Tuple[float, float]]):
         super(Capsule, self).__init__(name)
-        self.radius = self._symbol("radius", radius)
-        self.cylinder_length = self._symbol("cylinder_length", length)
+        self.radius = self.add_param("radius", radius)
+        self.cylinder_length = self.add_param("cylinder_length", cylinder_length)
 
     @property
     def volume(self) -> sympy.Expr:

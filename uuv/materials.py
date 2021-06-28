@@ -25,6 +25,12 @@ class Material():
         self.name = name
         self.density = density
 
+    def mass_to_volume(self, mass: sympy.Expr) -> sympy.Expr:
+        return mass / self.density
+
+    def volume_to_mass(self, volume: sympy.Expr) -> sympy.Expr:
+        return volume * self.density
+
 
 SEA_WATER = Material("Sea_Water", 1027.57516)
 OIL_DTE10 = Material("Mobil_DTE_10_Excel_15", 837.0)
@@ -71,3 +77,37 @@ class FoamMaterial(Material):
 FOAM_MZ_22 = FoamMaterial("Foam_MZ_22", 350, 1000)
 FOAM_BZ_24 = FoamMaterial("Foam_BZ_24", 385, 2000)
 FOAM_BZ_26 = FoamMaterial("Foam_BZ_26", 416, 3000)
+
+
+# TODO: Do a better representation for individual cells
+class Battery(Material):
+    def __init__(self,
+                 name: str,
+                 capacity_per_mass: float,    # Wh/kg
+                 capacity_per_volume: float,  # Wh/m^3
+                 derating_factor: float,
+                 packing_factor: float):
+        super(Battery, self).__init__(
+            name, capacity_per_volume / capacity_per_mass)
+        self.capacity_per_mass = capacity_per_mass / (1.0 + derating_factor)
+        self.capacity_per_volume = capacity_per_volume / (1.0 + derating_factor) * packing_factor
+
+    def capacity_to_mass(self, capacity: sympy.Expr) -> sympy.Expr:
+        """Already taking the derating factor into account."""
+        return capacity / self.capacity_per_mass
+
+    def mass_to_capacity(self, volume: sympy.Expr) -> sympy.Expr:
+        """Already taking the derating factor into account."""
+        return volume * self.capacity_per_mass
+
+    def capacity_to_packed_volume(self, capacity: sympy.Expr) -> sympy.Expr:
+        """Already taking the derating and packing factors into account."""
+        return capacity / (self.capacity_per_volume)
+
+    def packed_volume_to_capacity(self, volume: sympy.Expr) -> sympy.Expr:
+        """Already taking the derating and packing factors into account."""
+        return volume * self.capacity_per_volume
+
+
+BATTERY_LI_ION = Battery("Batter_Lithium_Ion", 500, 615e3, 0.2, 0.85)
+BATTERY_LI_THC = Battery("Batter_Lithium_Thionyl_Chloride", 621, 1211e3, 0.2, 0.85)

@@ -18,14 +18,25 @@ from typing import Dict, Tuple
 import math
 import sympy
 
-import shapes
-import materials
+from shapes import *
+from materials import *
 
 
 class Module():
     def __init__(self, name: str, shape: 'Shape'):
         self.name = name
         self.shape = shape
+        self.bounds = dict()
+
+    def add_param(self, name: str, spec: Union[sympy.Expr, Tuple[float, float]]) \
+            -> sympy.Expr:
+        if not isinstance(spec, tuple):
+            return spec
+
+        name = self.name + "_" + name
+        assert name not in self.bounds and len(spec) == 2
+        self.bounds[name] = (float(spec[0]), float(spec[1]))
+        return sympy.Symbol(name)
 
     @property
     def volume(self):
@@ -33,7 +44,7 @@ class Module():
 
     @property
     def displacement(self):
-        return self.volume * materials.SEA_WATER.density
+        return self.volume * SEA_WATER.density
 
 
 class BuoyancyModule(Module):
@@ -46,9 +57,9 @@ class BuoyancyModule(Module):
         return self.volume * self.material.density
 
 
-class FloatModule(Module):
+class FoamModule(Module):
     def __init__(self, name: str, shape: 'Cylinder', material: 'FoamMaterial'):
-        super(FloatModule, self).__init__(name, shape)
+        super(FoamModule, self).__init__(name, shape)
         self.material = material
 
     @property
@@ -58,42 +69,69 @@ class FloatModule(Module):
 
 class WetModule(Module):
     def __init__(self, name: str, dry_mass: sympy.Expr):
-        super(WetModule, self).__init__(name, shapes.Point())
+        super(WetModule, self).__init__(name, Point())
         self.dry_mass = dry_mass
 
 
 class DryModule(Module):
-    def __init__(self, name: str, dry_mass: sympy.Expr):
-        super(DryModule, self).__init__(name, shapes.Point())
-        self.dry_mass = dry_mass
+    def __init__(self, name: str):
+        super(DryModule, self).__init__(name, Point())
+
+    @property
+    def displacement(self):
+        return 0
+
+
+class BatteryPack(DryModule):
+    def __init__(self, name: str,
+                 capacity:  Union[sympy.Expr, Tuple[float, float]],
+                 battery: 'Battery'):
+        super(BatteryPack, self).__init__(name, Point())
+        self.capacity = self.add_param("capacity", capacity)
+        self.battery = battery
+
+    @property
+    def dry_mass(self):
+        return self.battery.capacity_to_mass(self.capacity)
+
+    @property
+    def dry_volume(self):
+        return self.battery.capacity_to_packed_volume(self.capacity)
 
 
 class PressureVessel(Module):
-    def __init__(self, name: str, dry_mass: sympy.Expr,
-                 outer_radius: sympy.Expr, inner_radius: sympy.Expr):
-        super(PressureVessel, self).__init__(name, )
-        self.dry_mass = dry_mass
+    def __init__(self, name: str, shape: 'Shape',
+                 inner_shape: 'Shape', material: 'VesselMaterial'):
+        super(PressureVessel, self).__init__(name, shape)
+        self.inner_shape = inner_shape
+        self.dry_mass = (shape.volume - inner_shape.volume) * material.density
 
 
 class SimpleVehicle(Module):
     def __init__(self, name: str, shape: 'Cylinder'):
+        super(SimpleVehicle, self).__init__(name, shape)
 
-        self.float1 = FloatModule(
-            "float1",
-            shapes.CylinderSymb("float1"),
-            materials.FOAM_BZ_26)
+        self.foam1 = FoamModule(
+            "foam1",
+            Cylinder("foam1", radius=0.0),
+            FOAM_BZ_26)
 
-        self.battery1 = PressureVessel(
-            "battery1")
+        self.battery1 = BatteryPack("battery1", (0.0, math.inf), BATTERY_LI_THC)
+        self.pvessel1 = PressureVessel(
+            "pv1",
+            Sphere("pv1_outer", 0.338 / 2),
+            Sphere("pv1_inner", 0.3148755601 / 2),
+            ALUMINIUM_6061_T6)
 
         self.buoyancy1 = BuoyancyModule(
             "bouyancy1",
-            shapes.CylinderSymb("float1"))
+            Cylinder("float1"))
 
 
 if __name__ == '__main__':
-    flo1 = FloatModule(
-        "FLO1",
-        shapes.Cylinder("FLO1", 0.15, 0.25),
-        materials.FOAM_BZ_26)
-    print(float(flo1.dry_mass))
+    pv1 = PressureVessel(
+        "pv1",
+        Sphere("pv1_outer", 0.338 / 2),
+        Sphere("pv1_inner", 0.3148755601 / 2),
+        ALUMINIUM_6061_T6)
+    print(float(pv1.dry_mass))
