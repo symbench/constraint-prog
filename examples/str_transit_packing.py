@@ -31,6 +31,7 @@ BATTERY_PACKING_FACTOR = 0.85
 vehicle_fairing_wet_mass = 8.822  # kg
 vehicle_inner_diameter = 0.35   # m
 movable_pitch_diameter = 0.05   # m
+movable_roll_length = 0.10  # m
 
 pressure_vessel_outer_diameter = 0.30  # m
 pressure_vessel_inner_diameter = 0.25  # m
@@ -42,7 +43,6 @@ pressure_vessel_dry_mass = (pressure_vessel_outer_volume - pressure_vessel_inner
     * ALUMINIUM_DENSITY  # kg
 pressure_vessel_wet_mass = pressure_vessel_dry_mass - \
     pressure_vessel_outer_volume * WATER_DENSITY_AT_SEA_LEVEL
-
 
 # ---------------
 
@@ -95,12 +95,12 @@ bladder1_displacement_half = bladder1_displacement_full / 2
 bladder1_displacement_empty = 0
 bladder1_dry_mass_full = bladder1_displacement_full * OIL_DENSITY
 bladder1_dry_mass_half = bladder1_displacement_half * OIL_DENSITY
-bladder1_dry_mass_empty = bladder1_displacement_half * OIL_DENSITY
+bladder1_dry_mass_empty = bladder1_displacement_empty * OIL_DENSITY
 bladder1_wet_mass_full = bladder1_displacement_full * \
     (OIL_DENSITY - WATER_DENSITY_AT_SEA_LEVEL)
 bladder1_wet_mass_half = bladder1_displacement_half * \
     (OIL_DENSITY - WATER_DENSITY_AT_SEA_LEVEL)
-bladder1_wet_mass_empty = bladder1_displacement_half * \
+bladder1_wet_mass_empty = bladder1_displacement_empty * \
     (OIL_DENSITY - WATER_DENSITY_AT_SEA_LEVEL)
 bladder1_length_full = bladder1_displacement_full / \
     (pi / 4 * pressure_vessel_outer_diameter ** 2)
@@ -125,6 +125,18 @@ wing_length = 0.248  # m
 wing_x_left = foam2_x_right
 wing_x_right = wing_x_left + wing_length
 wing_x_center = (wing_x_left + wing_x_right) / 2
+
+movable_roll_diameter = sympy.Symbol("movable_roll_diameter")
+movable_roll_volume = movable_roll_length * pi / 4 * movable_roll_diameter ** 2
+movable_roll_dry_mass = movable_roll_volume * LEAD_DENSITY
+movable_roll_wet_mass = movable_roll_volume * (LEAD_DENSITY - WATER_DENSITY_AT_SEA_LEVEL)
+movable_roll_x_left = wing_x_right
+movable_roll_x_right = movable_roll_x_left + movable_roll_length
+movable_roll_x_center = (movable_roll_x_left + movable_roll_x_right) / 2
+movable_roll_y_center_stb = (pressure_vessel_outer_diameter - movable_roll_diameter) / 2
+movable_roll_y_center_mid = 0
+movable_roll_y_center_prt = -movable_roll_y_center_stb
+movable_roll_z_center = 0
 
 vessel3_displacement = pressure_vessel_outer_volume
 vessel3_dry_mass = pressure_vessel_dry_mass
@@ -175,4 +187,6 @@ movable_pitch_dry_mass = movable_pitch_volume * LEAD_DENSITY
 movable_pitch_wet_mass = movable_pitch_volume * (LEAD_DENSITY - WATER_DENSITY_AT_SEA_LEVEL)
 movable_pitch_x_center_fwd = movable_pitch_length / 2
 movable_pitch_x_center_aft = vehicle_total_length - movable_pitch_length / 2
+movable_pitch_x_center_mid = vehicle_total_length / 2
+movable_pitch_y_center = 0
 movable_pitch_z_center = (movable_pitch_diameter - vehicle_inner_diameter) / 2
