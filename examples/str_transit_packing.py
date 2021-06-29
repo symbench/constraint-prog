@@ -383,7 +383,7 @@ center_of_buoyancy_invariable_sum_x = \
     vessel4_x_center * vessel4_displacement + \
     battery2_x_center * battery2_displacement
 center_of_buoyancy_invariable_sum_y = 0
-center_of_buoyancy_invariable_sum_z = 0
+center_of_buoyancy_invariable_sum_z = wing_z_center * wing_displacement
 
 center_of_buoyancy = {
     'bladder_full_pitch_forward_roll_center': {
