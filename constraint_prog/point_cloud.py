@@ -476,6 +476,22 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data)
 
+    def extend(self, other: 'PointCould') -> 'PointCloud':
+        """
+        Extends this point cloud with new columns from the other.
+        The number of points in the two cloud must match.
+        """
+        assert self.num_points == other.num_points
+        float_vars = list(self.float_vars) + other.float_vars
+        float_data = torch.cat((self.float_data, other.float_data), dim=1)
+        string_vars = list(self.string_vars) + other.string_vars
+        string_data = numpy.concatenate((self.string_data, other.string_data), axis=1)
+
+        return PointCloud(float_vars=float_vars,
+                          float_data=float_data,
+                          string_vars=string_vars,
+                          string_data=string_data)
+
     def projection(self, variables: List[str]) -> 'PointCloud':
         """
         Returns the projection of this point cloud to the specified set of

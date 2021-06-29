@@ -182,6 +182,10 @@ class SympyFunc(object):
             assert len(expr.args) == 1
             value0 = self._eval(expr.args[0])
             return torch.tan(value0)
+        elif expr.func == sympy.atan:
+            assert len(expr.args) == 1
+            value0 = self._eval(expr.args[0])
+            return torch.atan(value0)
         elif expr.func == sympy.sqrt:
             assert len(expr.args) == 1
             value0 = self._eval(expr.args[0])
