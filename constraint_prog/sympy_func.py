@@ -227,6 +227,10 @@ class SympyFunc(object):
             value0 = self._eval(expr.args[0])
             value1 = self._eval(expr.args[1])
             return value0 >= value1
+        elif expr.func == sympy.ceiling:
+            assert len(expr.args) == 1
+            value0 = self._eval(expr.args[0])
+            return torch.ceil(value0)
         elif expr.func == sympy.Piecewise:
             # the fallback case must be fully defined
             assert expr.args[-1][1].func == BooleanTrue
