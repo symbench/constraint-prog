@@ -81,8 +81,7 @@ def pseudo_inverse2(matrix: torch.Tensor, epsilon: float = 1e-3) -> torch.Tensor
     matrix = matrix.cpu()
 
     try:
-        u, s, v = torch.linalg.svd(
-            matrix, full_matrices=False, compute_uv=True)
+        u, s, v = torch.linalg.svd(matrix, full_matrices=False)
     except:
         print(matrix)
         assert matrix.isfinite().all().item()
