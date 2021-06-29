@@ -45,6 +45,8 @@ class SympyFunc(object):
         Adds all symbols occuring in the expression to the list of inputs
         of this function.
         """
+        if isinstance(expr, float) or isinstance(expr, int):
+            return
         if expr.func == sympy.Symbol:
             if expr.name not in self.input_names:
                 self.input_names.append(expr.name)
@@ -121,7 +123,9 @@ class SympyFunc(object):
             return self._eval(expr)
 
     def _eval(self, expr: sympy.Expr) -> torch.Tensor:
-        if (expr.func == sympy.Integer or expr.func == sympy.Float
+        if (isinstance(expr, float) or isinstance(expr, int)
+                or expr.func == sympy.Float
+                or expr.func == sympy.Integer
                 or expr.func == sympy.core.numbers.Rational
                 or expr.func == sympy.core.numbers.NegativeOne
                 or expr.func == sympy.core.numbers.Zero

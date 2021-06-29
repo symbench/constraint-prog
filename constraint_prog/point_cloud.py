@@ -277,7 +277,7 @@ class PointCloud:
         """
         assert len(stddev) == self.num_float_vars
         count = num_points - self.num_points
-        if count <= 0:
+        if count <= 0 or self.num_points <= 0:
             return
 
         indices = torch.randint(0, self.num_points, (count, ), device=self.device)
@@ -338,7 +338,7 @@ class PointCloud:
         return PointCloud(float_vars=self.float_vars,
                           float_data=float_data,
                           string_vars=self.string_vars,
-                          string_data=self.string_data[selected])
+                          string_data=self.string_data[selected.numpy()])
 
     def prune_bounding_box(self, minimums: List[float], maximums: List[float]) -> 'PointCloud':
         """
@@ -540,7 +540,8 @@ class PointFunc(object):
         """
         return self.exprs.keys()
 
-    def __call__(self, points: Union['PointCloud', torch.Tensor]) \
+    def __call__(self, points: Union['PointCloud', torch.Tensor],
+                 equs_as_float: bool = True) \
             -> Union['PointCloud', torch.Tensor]:
         """
         Evaluates the given list of expressions for the given point
@@ -556,7 +557,7 @@ class PointFunc(object):
             input_data = torch.stack(input_data, dim=-1)
 
         self.func.device = points.device  # works for both input types
-        output_data = self.func(input_data)
+        output_data = self.func(input_data, equs_as_float=equs_as_float)
 
         assert output_data.shape[-1] == len(self.output_names)
 

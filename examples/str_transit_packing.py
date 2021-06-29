@@ -41,12 +41,13 @@ GRAVITATIONAL_CONSTANT = 9.806  # m/s^2
 
 # design constants
 vehicle_fairing_wet_mass = 8.822  # kg
-vehicle_inner_diameter = 0.59   # m
+vehicle_inner_diameter = 0.60   # m
 movable_pitch_diameter = 0.05   # m
 movable_roll_length = 0.30  # m
 wing_dry_mass = 1.718  # kg
 wing_wet_mass = 1.698  # kg
 wing_length = 0.248  # m
+wing_z_offset = 0.1  # m
 required_battery_capacity = 28000  # Wh
 glider_depth_rating = 3000 * 1.25  # m
 
@@ -82,6 +83,7 @@ allowable_pitch_error_at_neutral = 1.5  # degrees
 allowable_roll_error_at_neutral = 0.5  # degrees
 
 # ---------------
+# center line (z = 0) is along the pressure vessels and foams axis
 
 foam1_length = sympy.Symbol("foam1_length")
 foam1_displacement = foam1_length * pi / 4 * \
@@ -155,7 +157,7 @@ foam2_x_center = (foam2_x_left + foam2_x_right) / 2  # m
 wing_x_left = foam2_x_right
 wing_x_right = wing_x_left + wing_length
 wing_x_center = (wing_x_left + wing_x_right) / 2
-wing_z_center = 0.1
+wing_z_center = (pressure_vessel_outer_diameter - vehicle_inner_diameter) / 2 + wing_z_offset
 
 movable_roll_diameter = sympy.Symbol("movable_roll_diameter")
 movable_roll_volume = movable_roll_length * pi / 4 * movable_roll_diameter ** 2
@@ -168,7 +170,7 @@ movable_roll_x_center = (movable_roll_x_left + movable_roll_x_right) / 2
 movable_roll_y_center_stb = (pressure_vessel_outer_diameter - movable_roll_diameter) / 2
 movable_roll_y_center_mid = 0
 movable_roll_y_center_prt = -movable_roll_y_center_stb
-movable_roll_z_center = 0
+movable_roll_z_center = (pressure_vessel_outer_diameter - vehicle_inner_diameter) / 2
 
 vessel3_displacement = pressure_vessel_outer_volume
 vessel3_dry_mass = pressure_vessel_dry_mass
@@ -327,7 +329,7 @@ battery_capacity_equation = battery1_capacity + battery2_capacity >= required_ba
 pitch_minimum_mass, pitch_minimum_x_sum, pitch_minimum_y_sum, pitch_minimum_z_sum = \
     get_weighted_wet_masses(bladder="empty", pitch="forward", roll="center")
 pitch_minimum_equation1 = pitch_minimum_x_sum / pitch_minimum_z_sum <= math.tan(-60 * pi / 180)
-pitch_minimum_equation2 = pitch_minimum_mass >= 3.0  # sinks to bottom
+pitch_minimum_equation2 = pitch_minimum_mass >= 10.0  # sinks to bottom
 
 pitch_maximum_mass, pitch_maximum_x_sum, pitch_maximum_y_sum, pitch_maximum_z_sum = \
     get_weighted_wet_masses(bladder="full", pitch="aft", roll="center")
@@ -337,7 +339,7 @@ pitch_neutral_mass, pitch_neutral_x_sum, pitch_neutral_y_sum, pitch_neutral_z_su
     get_weighted_wet_masses(bladder="half", pitch="middle", roll="center")
 pitch_neutral_equation1 = pitch_neutral_x_sum / pitch_neutral_z_sum <= math.tan(1.5 * pi / 180)
 pitch_neutral_equation2 = pitch_neutral_x_sum / pitch_neutral_z_sum >= math.tan(-1.5 * pi / 180)
-pitch_neutral_equation3 = pitch_neutral_mass <= -0.1  # floats to surface
+pitch_neutral_equation3 = pitch_neutral_mass <= -2.0  # floats to surface
 
 roll_minimum_mass, roll_minimum_x_sum, roll_minimum_y_sum, roll_minimum_z_sum = \
     get_weighted_wet_masses(bladder="half", pitch="middle", roll="starboard")
@@ -348,7 +350,7 @@ constraints = PointFunc({
     "battery2_packing_equation": battery2_packing_equation,
     "battery_capacity_equation": battery_capacity_equation,
     "pitch_minimum_equation1": pitch_minimum_equation1,
-    "pitch_minimum_equation2": pitch_minimum_equation2,
+    # "pitch_minimum_equation2": pitch_minimum_equation2,
     "pitch_neutral_equation1": pitch_neutral_equation1,
     "pitch_neutral_equation2": pitch_neutral_equation2,
     "pitch_neutral_equation3": pitch_neutral_equation3,
@@ -383,11 +385,12 @@ derived_values = PointFunc({
     "vehicle_inner_length": vehicle_inner_length,
     "vehicle_finess_ratio": vehicle_inner_length / vehicle_inner_diameter,
     "wing_x_center": wing_x_center,
+    "wing_z_center": wing_z_center,
 })
 
 
 def print_solutions(points, num=None):
-    points = points.extend(derived_values(points))
+    points = points.extend(derived_values(points, equs_as_float=False))
     if num is None:
         num = points.num_points
     else:
@@ -426,13 +429,16 @@ errors = constraints(points)
 points = points.prune_by_tolerances(errors, 0.5)
 print(points.num_points)
 
-if points.num_points > 0:
-    for _ in range(10):
-        points.add_mutations([1000, 1000, 0.1, 0.1, 0.1, 0.1, 0.1], 5000)
-        points = points.newton_raphson(constraints, bounds)
-        points = points.prune_by_tolerances(constraints(points), 1e-2)
-        points = points.prune_close_points([500, 500, 0.05, 0.05, 0.05, 0.05, 0.05])
-        print(points.num_points)
+for _ in range(10):
+    if not points.num_points:
+        print("no points left")
+        break
+    points.add_mutations([1000, 1000, 0.1, 0.1, 0.1, 0.1, 0.1], 5000)
+    points = points.newton_raphson(constraints, bounds)
+    points = points.prune_by_tolerances(constraints(points), 0.1)
+    points = points.prune_close_points([500, 500, 0.05, 0.05, 0.05, 0.05, 0.05])
+    print(points.num_points)
 
+if points.num_points:
     points.plot2d(2, 3)
     print_solutions(points, 10)
