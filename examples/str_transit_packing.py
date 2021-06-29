@@ -31,16 +31,15 @@ LEAD_DENSITY = 11343.0  # kg/m^3
 
 BATTERY_CAPACITY_PER_MASS = 621  # Wh / kg
 BATTERY_CAPACITY_PER_VOLUME = 1211e3  # Wh / m^3
-BATTERY_DERATING_FACTOR = 0.2
 BATTERY_PACKING_FACTOR = 0.85
 
 vehicle_fairing_wet_mass = 8.822  # kg
-vehicle_inner_diameter = 0.35   # m
+vehicle_inner_diameter = 0.40   # m
 movable_pitch_diameter = 0.05   # m
-movable_roll_length = 0.10  # m
+movable_roll_length = 0.30  # m
 
-pressure_vessel_outer_diameter = 0.30  # m
-pressure_vessel_inner_diameter = 0.25  # m
+pressure_vessel_outer_diameter = vehicle_inner_diameter - movable_pitch_diameter  # m
+pressure_vessel_inner_diameter = pressure_vessel_outer_diameter - 0.05  # m
 pressure_vessel_outer_volume = pi / 6 \
     * (pressure_vessel_outer_diameter ** 3)  # m^3
 pressure_vessel_inner_volume = pi / 6 \
@@ -74,12 +73,10 @@ vessel1_x_center = (vessel1_x_left + vessel1_x_right) / 2
 
 battery1_capacity = sympy.Symbol("battery1_capacity")
 battery1_displacement = 0
-battery1_dry_mass = battery1_capacity / BATTERY_CAPACITY_PER_MASS \
-    * (1.0 + BATTERY_DERATING_FACTOR)
+battery1_dry_mass = battery1_capacity / BATTERY_CAPACITY_PER_MASS
 battery1_wet_mass = battery1_dry_mass
 battery1_x_center = vessel1_x_center
-battery1_packing_volume = battery1_capacity / BATTERY_CAPACITY_PER_VOLUME \
-    * (1.0 + BATTERY_DERATING_FACTOR) / BATTERY_PACKING_FACTOR
+battery1_packing_volume = battery1_capacity / BATTERY_CAPACITY_PER_VOLUME / BATTERY_PACKING_FACTOR
 
 vessel2_displacement = pressure_vessel_outer_volume
 vessel2_dry_mass = pressure_vessel_dry_mass
@@ -180,12 +177,10 @@ vessel4_x_center = (vessel4_x_left + vessel4_x_right) / 2
 
 battery2_capacity = sympy.Symbol("battery2_capacity")
 battery2_displacement = 0
-battery2_dry_mass = battery2_capacity / BATTERY_CAPACITY_PER_MASS \
-    * (1.0 + BATTERY_DERATING_FACTOR)
+battery2_dry_mass = battery2_capacity / BATTERY_CAPACITY_PER_MASS
 battery2_wet_mass = battery2_dry_mass
 battery2_x_center = vessel4_x_center
-battery2_packing_volume = battery2_capacity / BATTERY_CAPACITY_PER_VOLUME \
-    * (1.0 + BATTERY_DERATING_FACTOR) / BATTERY_PACKING_FACTOR
+battery2_packing_volume = battery2_capacity / BATTERY_CAPACITY_PER_VOLUME / BATTERY_PACKING_FACTOR
 
 vehicle_total_length = vessel4_x_right
 vehicle_fairing_x_center = vehicle_total_length / 2
@@ -202,364 +197,11 @@ movable_pitch_x_center_mid = vehicle_total_length / 2
 movable_pitch_y_center = 0
 movable_pitch_z_center = (movable_pitch_diameter - vehicle_inner_diameter) / 2
 
-vehicle_total_mass = foam1_dry_mass + vessel1_dry_mass + battery1_dry_mass + \
+vehicle_dry_mass = foam1_dry_mass + vessel1_dry_mass + battery1_dry_mass + \
     vessel2_dry_mass + reservoir1_dry_mass_half + bladder1_dry_mass_half + \
     foam2_dry_mass + wing_dry_mass + movable_roll_dry_mass + vessel3_dry_mass + \
     electronics_dry_mass + foam3_dry_mass + vessel4_dry_mass + battery2_dry_mass + \
     movable_pitch_dry_mass
-vehicle_total_displacement_bladder_full = foam1_displacement + vessel1_displacement + \
-    battery1_displacement + vessel2_displacement + reservoir1_displacement + \
-    bladder1_displacement_full + foam2_displacement + wing_displacement + \
-    movable_roll_displacement + vessel3_displacement + electronics_displacement + \
-    foam3_displacement + vessel4_displacement + battery2_displacement + \
-    movable_pitch_displacement
-vehicle_total_displacement_bladder_half = foam1_displacement + vessel1_displacement + \
-    battery1_displacement + vessel2_displacement + reservoir1_displacement + \
-    bladder1_displacement_half + foam2_displacement + wing_displacement + \
-    movable_roll_displacement + vessel3_displacement + electronics_displacement + \
-    foam3_displacement + vessel4_displacement + battery2_displacement + \
-    movable_pitch_displacement
-vehicle_total_displacement_bladder_empty = foam1_displacement + vessel1_displacement + \
-    battery1_displacement + vessel2_displacement + reservoir1_displacement + \
-    bladder1_displacement_empty + foam2_displacement + wing_displacement + \
-    movable_roll_displacement + vessel3_displacement + electronics_displacement + \
-    foam3_displacement + vessel4_displacement + battery2_displacement + \
-    movable_pitch_displacement
-
-center_of_gravity_invariable_sum_x = foam1_x_center * foam1_dry_mass + \
-    vessel1_x_center * vessel1_dry_mass + \
-    battery1_x_center * battery1_dry_mass + \
-    vessel2_x_center * vessel2_dry_mass + \
-    foam2_x_center * foam2_dry_mass + \
-    wing_x_center * wing_dry_mass + \
-    vessel3_x_center * vessel3_dry_mass + \
-    electronics_x_center * electronics_dry_mass + \
-    foam3_x_center * foam3_dry_mass + \
-    vessel4_x_center * vessel4_dry_mass + \
-    battery2_x_center * battery2_dry_mass
-center_of_gravity_invariable_sum_y = 0
-center_of_gravity_invariable_sum_z = wing_z_center * wing_dry_mass
-
-center_of_gravity = {
-    'bladder_full_pitch_forward_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_fwd * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_full +
-              reservoir1_x_center * reservoir1_dry_mass_empty) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_full_pitch_middle_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_mid * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_full +
-              reservoir1_x_center * reservoir1_dry_mass_empty) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_full_pitch_aft_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_aft * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_full +
-              reservoir1_x_center * reservoir1_dry_mass_empty) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_half_pitch_forward_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_fwd * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_half +
-              reservoir1_x_center * reservoir1_dry_mass_half) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_half_pitch_middle_roll_starboard': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_left * movable_roll_dry_mass +
-              movable_pitch_x_center_mid * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_half +
-              reservoir1_x_center * reservoir1_dry_mass_half) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_stb * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_half_pitch_middle_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_mid * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_half +
-              reservoir1_x_center * reservoir1_dry_mass_half) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_half_pitch_middle_roll_port': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_right * movable_roll_dry_mass +
-              movable_pitch_x_center_mid * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_half +
-              reservoir1_x_center * reservoir1_dry_mass_half) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_prt * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_half_pitch_aft_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_aft * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_half +
-              reservoir1_x_center * reservoir1_dry_mass_half) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_empty_pitch_forward_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_fwd * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_empty +
-              reservoir1_x_center * reservoir1_dry_mass_full) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_empty_pitch_middle_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_mid * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_empty +
-              reservoir1_x_center * reservoir1_dry_mass_full) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass},
-    'bladder_empty_pitch_aft_roll_center': {
-        'x': (center_of_gravity_invariable_sum_x +
-              movable_roll_x_center * movable_roll_dry_mass +
-              movable_pitch_x_center_aft * movable_pitch_dry_mass +
-              bladder1_x_center * bladder1_dry_mass_empty +
-              reservoir1_x_center * reservoir1_dry_mass_full) / vehicle_total_mass,
-        'y': (center_of_gravity_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_dry_mass +
-              movable_roll_y_center_mid * movable_roll_dry_mass) / vehicle_total_mass,
-        'z': (center_of_gravity_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_dry_mass +
-              movable_roll_z_center * movable_roll_dry_mass) / vehicle_total_mass}
-}
-
-center_of_buoyancy_invariable_sum_x = \
-    foam1_x_center * foam1_displacement + \
-    vessel1_x_center * vessel1_displacement + \
-    battery1_x_center * battery1_displacement + \
-    vessel2_x_center * vessel2_displacement + \
-    foam2_x_center * foam2_displacement + \
-    wing_x_center * wing_displacement + \
-    vessel3_x_center * vessel3_displacement + \
-    electronics_x_center * electronics_displacement + \
-    foam3_x_center * foam3_displacement + \
-    vessel4_x_center * vessel4_displacement + \
-    battery2_x_center * battery2_displacement
-center_of_buoyancy_invariable_sum_y = 0
-center_of_buoyancy_invariable_sum_z = wing_z_center * wing_displacement
-
-center_of_buoyancy = {
-    'bladder_full_pitch_forward_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_fwd * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_full) / vehicle_total_displacement_bladder_full,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_full,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_full},
-    'bladder_full_pitch_middle_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_mid * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_full) / vehicle_total_displacement_bladder_full,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_full,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_full},
-    'bladder_full_pitch_aft_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_aft * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_full) / vehicle_total_displacement_bladder_full,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_full,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_full},
-    'bladder_half_pitch_forward_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_fwd * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_half) / vehicle_total_displacement_bladder_half,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_half,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_half},
-    'bladder_half_pitch_middle_roll_starboard': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_left * movable_roll_displacement +
-              movable_pitch_x_center_mid * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_half) / vehicle_total_displacement_bladder_half,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_stb * movable_roll_displacement) / vehicle_total_displacement_bladder_half,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_half},
-    'bladder_half_pitch_middle_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_mid * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_half) / vehicle_total_displacement_bladder_half,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_half,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_half},
-    'bladder_half_pitch_middle_roll_port': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_right * movable_roll_displacement +
-              movable_pitch_x_center_mid * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_half) / vehicle_total_displacement_bladder_half,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_prt * movable_roll_displacement) / vehicle_total_displacement_bladder_half,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_half},
-    'bladder_half_pitch_aft_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_aft * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_half) / vehicle_total_displacement_bladder_half,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_half,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_half},
-    'bladder_empty_pitch_forward_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_fwd * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_empty) / vehicle_total_displacement_bladder_empty,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_empty,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_empty},
-    'bladder_empty_pitch_middle_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_mid * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_empty) / vehicle_total_displacement_bladder_empty,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_empty,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_empty},
-    'bladder_empty_pitch_aft_roll_center': {
-        'x': (center_of_buoyancy_invariable_sum_x +
-              movable_roll_x_center * movable_roll_displacement +
-              movable_pitch_x_center_aft * movable_pitch_displacement +
-              bladder1_x_center * bladder1_displacement_empty) / vehicle_total_displacement_bladder_empty,
-        'y': (center_of_buoyancy_invariable_sum_y +
-              movable_pitch_y_center * movable_pitch_displacement +
-              movable_roll_y_center_mid * movable_roll_displacement) / vehicle_total_displacement_bladder_empty,
-        'z': (center_of_buoyancy_invariable_sum_z +
-              movable_pitch_z_center * movable_pitch_displacement +
-              movable_roll_z_center * movable_roll_displacement) / vehicle_total_displacement_bladder_empty}
-}
-
-pitch_angle_minimum = atan(
-    (center_of_gravity['bladder_empty_pitch_forward_roll_center']['x'] -
-     center_of_buoyancy['bladder_empty_pitch_forward_roll_center']['x']) /
-    (center_of_buoyancy['bladder_empty_pitch_forward_roll_center']['z'] -
-     center_of_gravity['bladder_empty_pitch_forward_roll_center']['z'])) * 180.0 / pi
-pitch_angle_neutral = atan(
-    (center_of_gravity['bladder_half_pitch_middle_roll_center']['x'] -
-     center_of_buoyancy['bladder_half_pitch_middle_roll_center']['x']) /
-    (center_of_buoyancy['bladder_half_pitch_middle_roll_center']['z'] -
-     center_of_gravity['bladder_half_pitch_middle_roll_center']['z'])) * 180.0 / pi
-pitch_angle_maximum = atan(
-    (center_of_gravity['bladder_full_pitch_aft_roll_center']['x'] -
-     center_of_buoyancy['bladder_full_pitch_aft_roll_center']['x']) /
-    (center_of_buoyancy['bladder_full_pitch_aft_roll_center']['z'] -
-     center_of_gravity['bladder_full_pitch_aft_roll_center']['z'])) * 180.0 / pi
-roll_angle_minimum = atan(
-    (center_of_gravity['bladder_half_pitch_middle_roll_port']['y'] -
-     center_of_buoyancy['bladder_half_pitch_middle_roll_port']['y']) /
-    (center_of_buoyancy['bladder_half_pitch_middle_roll_port']['z'] -
-     center_of_gravity['bladder_half_pitch_middle_roll_port']['z'])) * 180.0 / pi
-roll_angle_neutral = atan(
-    (center_of_gravity['bladder_half_pitch_middle_roll_center']['y'] -
-     center_of_buoyancy['bladder_half_pitch_middle_roll_center']['y']) /
-    (center_of_buoyancy['bladder_half_pitch_middle_roll_center']['z'] -
-     center_of_gravity['bladder_half_pitch_middle_roll_center']['z'])) * 180.0 / pi
-roll_angle_maximum = atan(
-    (center_of_gravity['bladder_half_pitch_middle_roll_starboard']['y'] -
-     center_of_buoyancy['bladder_half_pitch_middle_roll_starboard']['y']) /
-    (center_of_buoyancy['bladder_half_pitch_middle_roll_starboard']['z'] -
-     center_of_gravity['bladder_half_pitch_middle_roll_starboard']['z'])) * 180.0 / pi
-
-# ---------------
-
-battery1_packing_equation = battery1_packing_volume <= pressure_vessel_inner_volume
-battery2_packing_equation = battery2_packing_volume <= pressure_vessel_inner_volume
-pitch_angle_minimum_equation = pitch_angle_minimum <= -60
-pitch_angle_maximum_equation = pitch_angle_maximum >= 60
-pitch_angle_neutral_equation = sympy.Abs(pitch_angle_neutral) <= allowable_pitch_error_at_neutral
-roll_angle_minimum_equation = roll_angle_minimum <= -20
-roll_angle_maximum_equation = roll_angle_maximum >= 20
-roll_angle_neutral_equation = sympy.Abs(roll_angle_neutral) <= allowable_roll_error_at_neutral
-
-# Assumptions:
-#   movable_roll_displacement = volume of entire possible location for the mass
-#   movable_pitch_displacement = volume of entire possible location for the mass
-#   z-placements of all components are 0 (not true in the spreadsheet for Battery Pack 1)
 
 
 def get_weighted_wet_masses(bladder: str, pitch: str, roll: str) \
@@ -631,6 +273,9 @@ def get_weighted_wet_masses(bladder: str, pitch: str, roll: str) \
     total_mass += electronics_wet_mass
     total_x_sum += electronics_wet_mass * electronics_x_center
 
+    total_mass += foam3_wet_mass
+    total_x_sum += foam3_wet_mass * foam3_x_center
+
     total_mass += vessel4_wet_mass
     total_x_sum += vessel4_wet_mass * vessel4_x_center
 
@@ -651,18 +296,9 @@ def get_weighted_wet_masses(bladder: str, pitch: str, roll: str) \
     return (total_mass, total_x_sum, total_y_sum, total_z_sum)
 
 
-if False:
-    method1 = center_of_gravity['bladder_half_pitch_middle_roll_starboard']['y'] - \
-        center_of_buoyancy['bladder_half_pitch_middle_roll_starboard']['y']
-    print(method1)
-
-    mass, x_sum, y_sum, z_sum = get_weighted_wet_masses(
-        bladder="half", pitch="middle", roll="starboard")
-    method2 = y_sum / mass
-    print(method2)
-
 battery1_packing_equation = battery1_packing_volume <= pressure_vessel_inner_volume
 battery2_packing_equation = battery2_packing_volume <= pressure_vessel_inner_volume
+battery_capacity_equation = battery1_capacity + battery2_capacity >= 28000.0
 
 pitch_minimum_mass, pitch_minimum_x_sum, pitch_minimum_y_sum, pitch_minimum_z_sum = \
     get_weighted_wet_masses(bladder="empty", pitch="forward", roll="center")
@@ -681,11 +317,12 @@ pitch_neutral_equation3 = pitch_neutral_mass <= -0.1  # floats to surface
 
 roll_minimum_mass, roll_minimum_x_sum, roll_minimum_y_sum, roll_minimum_z_sum = \
     get_weighted_wet_masses(bladder="half", pitch="middle", roll="starboard")
-roll_minimum_equation = roll_minimum_y_sum / roll_minimum_z_sum <= math.tan(-0 * pi / 180)
+roll_minimum_equation = roll_minimum_y_sum / roll_minimum_z_sum <= math.tan(-20 * pi / 180)
 
 constraints = PointFunc({
     "battery1_packing_equation": battery1_packing_equation,
     "battery2_packing_equation": battery2_packing_equation,
+    "battery_capacity_equation": battery_capacity_equation,
     "pitch_minimum_equation1": pitch_minimum_equation1,
     "pitch_minimum_equation2": pitch_minimum_equation2,
     "pitch_neutral_equation1": pitch_neutral_equation1,
@@ -701,6 +338,13 @@ print(constraints.output_names)
 derived_values = PointFunc({
     "battery1_packing_volume": battery1_packing_volume,
     "battery2_packing_volume": battery2_packing_volume,
+    "battery1_dry_mass": battery1_dry_mass,
+    "battery2_dry_mass": battery2_dry_mass,
+    "foam1_dry_mass": foam1_dry_mass,
+    "foam2_dry_mass": foam2_dry_mass,
+    "foam3_dry_mass": foam3_dry_mass,
+    "movable_pitch_dry_mass": movable_pitch_dry_mass,
+    "movable_roll_dry_mass": movable_roll_dry_mass,
     "pitch_minimum_mass": pitch_minimum_mass,
     "pitch_minimum_angle": atan(pitch_minimum_x_sum / pitch_minimum_z_sum) * 180 / pi,
     "pitch_neutral_mass": pitch_neutral_mass,
@@ -709,7 +353,18 @@ derived_values = PointFunc({
     "pitch_maximum_angle": atan(pitch_maximum_x_sum / pitch_maximum_z_sum) * 180 / pi,
     "roll_minimum_mass": roll_minimum_mass,
     "roll_minimum_angle": atan(roll_minimum_y_sum / roll_minimum_z_sum) * 180 / pi,
+    "battery_capacity": battery1_capacity + battery2_capacity,
+    "vehicle_dry_mass": vehicle_dry_mass,
 })
+
+foam1_dry_mass + vessel1_dry_mass + battery1_dry_mass + \
+    vessel2_dry_mass + reservoir1_dry_mass_half + bladder1_dry_mass_half + \
+    foam2_dry_mass + wing_dry_mass + movable_roll_dry_mass + vessel3_dry_mass + \
+    electronics_dry_mass + foam3_dry_mass + vessel4_dry_mass + battery2_dry_mass + \
+    movable_pitch_dry_mass
+
+print("pressure_vessel_inner_volume:", pressure_vessel_inner_volume)
+print("pressure_vessel_dry_mass:", pressure_vessel_dry_mass)
 
 
 def print_solutions(points, num=None):
@@ -726,11 +381,11 @@ def print_solutions(points, num=None):
 
 
 bounds = {
-    "battery1_capacity": (5000.0, 15000.0),
-    "battery2_capacity": (5000.0, 15000.0),
-    "foam1_length": (0.0, 2.0),
-    "foam2_length": (0.0, 2.0),
-    "foam3_length": (0.0, 2.0),
+    "battery1_capacity": (5000.0, 40000.0),
+    "battery2_capacity": (5000.0, 40000.0),
+    "foam1_length": (0.0, 1.0),
+    "foam2_length": (0.0, 1.0),
+    "foam3_length": (0.0, 1.0),
     "movable_pitch_length": (0.10, 1.0),
     "movable_roll_diameter": (0.05, 0.5),
 }
@@ -752,11 +407,12 @@ errors = constraints(points)
 points = points.prune_by_tolerances(errors, 1e-1)
 print(points.num_points)
 
-for _ in range(10):
+for _ in range(2):
     points.add_mutations([1000, 1000, 0.1, 0.1, 0.1, 0.1, 0.1], 5000)
     points = points.newton_raphson(constraints, bounds)
-    points = points.prune_by_tolerances(constraints(points), 1e-2)
+    points = points.prune_by_tolerances(constraints(points), 1e-3)
     points = points.prune_close_points([500, 500, 0.05, 0.05, 0.05, 0.05, 0.05])
     print(points.num_points)
 
+points.plot2d(0, 1)
 print_solutions(points, 10)
