@@ -24,6 +24,7 @@ from constraint_prog.point_cloud import PointCloud, PointFunc
 pi = 3.14159265359
 
 WATER_DENSITY_AT_SEA_LEVEL = 1027.0  # kg/m^3
+WATER_DENSITY_AT_DIVE_DEPTH = 1041.02  # kg/m^3
 OIL_DENSITY = 837.0  # kg/m^3
 FOAM_DENSITY = 406.0  # kg/m^3
 LEAD_DENSITY = 11343.0  # kg/m^3
@@ -52,16 +53,24 @@ required_battery_capacity = 28000  # Wh
 glider_depth_rating = 3000 * 1.25  # m
 
 # calculated automatically
-glider_crush_pressure = WATER_DENSITY_AT_SEA_LEVEL * glider_depth_rating * GRAVITATIONAL_CONSTANT
-aluminium_buckling_failure = ((glider_crush_pressure * 0.5 / ALUMINIUM_YOUNG_MODULUS) *
-                              (1.0 - ALUMINIUM_POISSON_RATIO ** 2)) ** (1.0/3.0)
-aluminium_stress_failure = 0.5 * (1.0 - math.sqrt(1.0 - 2 * glider_crush_pressure /
-                                                  ALUMINIUM_YIELD_STRESS))
-
 pressure_vessel_outer_diameter = vehicle_inner_diameter - movable_pitch_diameter  # m
-pressure_vessel_thickness = max(aluminium_buckling_failure, aluminium_stress_failure) * \
-    pressure_vessel_outer_diameter
-pressure_vessel_inner_diameter = pressure_vessel_outer_diameter - 2 * pressure_vessel_thickness
+glider_crush_pressure = WATER_DENSITY_AT_DIVE_DEPTH * glider_depth_rating * GRAVITATIONAL_CONSTANT
+# aluminum_buckling_failure_cylinder = ((glider_crush_pressure * 0.5 / ALUMINIUM_YOUNG_MODULUS) *
+#                                        (1.0 - ALUMINIUM_POISSON_RATIO ** 2)) ** (1.0/3.0) * \
+#                                       pressure_vessel_outer_diameter
+# aluminum_stress_failure_cylinder = 0.5 * (1.0 - math.sqrt(1.0 - 2 * glider_crush_pressure /
+#                                                            ALUMINIUM_YIELD_STRESS)) * \
+#                                     pressure_vessel_outer_diameter
+aluminum_buckling_failure_sphere = sqrt(glider_crush_pressure *
+                                        (0.5 * pressure_vessel_outer_diameter)**2 / 
+                                        (0.365 * ALUMINIUM_YOUNG_MODULUS))
+aluminum_stress_failure_sphere = (glider_crush_pressure * 0.5 * pressure_vessel_outer_diameter) / \
+    (2.0 * ALUMINIUM_YIELD_STRESS)
+
+# pressure_vessel_thickness_cylinder = max(aluminum_buckling_failure_cylinder, aluminum_stress_failure_cylinder) * \
+#     pressure_vessel_outer_diameter
+pressure_vessel_thickness_sphere = max(aluminum_buckling_failure_sphere, aluminum_stress_failure_sphere)
+pressure_vessel_inner_diameter = pressure_vessel_outer_diameter - 2 * pressure_vessel_thickness_sphere
 pressure_vessel_outer_volume = pi / 6 \
     * (pressure_vessel_outer_diameter ** 3)  # m^3
 pressure_vessel_inner_volume = pi / 6 \
@@ -73,7 +82,8 @@ pressure_vessel_wet_mass = pressure_vessel_dry_mass - \
 
 print("pressure_vessel_outer_diameter:", pressure_vessel_outer_diameter)
 print("pressure_vessel_inner_diameter:", pressure_vessel_inner_diameter)
-print("pressure_vessel_thickness:", pressure_vessel_thickness)
+print("pressure_vessel_crush_pressure: ", glider_crush_pressure)
+print("pressure_vessel_thickness:", pressure_vessel_thickness_sphere)
 print("pressure_vessel_inner_volume:", pressure_vessel_inner_volume)
 print("pressure_vessel_dry_mass:", pressure_vessel_dry_mass)
 print("pressure_vessel_wet_mass:", pressure_vessel_wet_mass)
