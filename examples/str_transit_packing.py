@@ -26,21 +26,41 @@ pi = 3.14159265359
 WATER_DENSITY_AT_SEA_LEVEL = 1027.0  # kg/m^3
 OIL_DENSITY = 837.0  # kg/m^3
 FOAM_DENSITY = 406.0  # kg/m^3
-ALUMINIUM_DENSITY = 2700.0  # kg/m^3
 LEAD_DENSITY = 11343.0  # kg/m^3
+
+ALUMINIUM_DENSITY = 2700.0  # kg/m^3
+ALUMINIUM_YOUNG_MODULUS = 6.89e10  # Pa
+ALUMINIUM_YIELD_STRESS = 2.76e8  # Pa
+ALUMINIUM_POISSON_RATIO = 0.33
 
 BATTERY_CAPACITY_PER_MASS = 621  # Wh / kg
 BATTERY_CAPACITY_PER_VOLUME = 1211e3  # Wh / m^3
 BATTERY_PACKING_FACTOR = 0.85
 
+GRAVITATIONAL_CONSTANT = 9.806  # m/s^2
+
+# design constants
 vehicle_fairing_wet_mass = 8.822  # kg
-vehicle_inner_diameter = 0.49   # m
+vehicle_inner_diameter = 0.59   # m
 movable_pitch_diameter = 0.05   # m
 movable_roll_length = 0.30  # m
+wing_dry_mass = 1.718  # kg
+wing_wet_mass = 1.698  # kg
+wing_length = 0.248  # m
+required_battery_capacity = 28000  # Wh
+glider_depth_rating = 3000 * 1.25  # m
 
 # calculated automatically
+glider_crush_pressure = WATER_DENSITY_AT_SEA_LEVEL * glider_depth_rating * GRAVITATIONAL_CONSTANT
+aluminium_buckling_failure = ((glider_crush_pressure * 0.5 / ALUMINIUM_YOUNG_MODULUS) *
+                              (1.0 - ALUMINIUM_POISSON_RATIO ** 2)) ** (1.0/3.0)
+aluminium_stress_failure = 0.5 * (1.0 - math.sqrt(1.0 - 2 * glider_crush_pressure /
+                                                  ALUMINIUM_YIELD_STRESS))
+
 pressure_vessel_outer_diameter = vehicle_inner_diameter - movable_pitch_diameter  # m
-pressure_vessel_inner_diameter = pressure_vessel_outer_diameter - 0.05  # m
+pressure_vessel_thickness = max(aluminium_buckling_failure, aluminium_stress_failure) * \
+    pressure_vessel_outer_diameter
+pressure_vessel_inner_diameter = pressure_vessel_outer_diameter - 2 * pressure_vessel_thickness
 pressure_vessel_outer_volume = pi / 6 \
     * (pressure_vessel_outer_diameter ** 3)  # m^3
 pressure_vessel_inner_volume = pi / 6 \
@@ -49,6 +69,14 @@ pressure_vessel_dry_mass = (pressure_vessel_outer_volume - pressure_vessel_inner
     * ALUMINIUM_DENSITY  # kg
 pressure_vessel_wet_mass = pressure_vessel_dry_mass - \
     pressure_vessel_outer_volume * WATER_DENSITY_AT_SEA_LEVEL
+
+print("pressure_vessel_outer_diameter:", pressure_vessel_outer_diameter)
+print("pressure_vessel_inner_diameter:", pressure_vessel_inner_diameter)
+print("pressure_vessel_thickness:", pressure_vessel_thickness)
+print("pressure_vessel_inner_volume:", pressure_vessel_inner_volume)
+print("pressure_vessel_dry_mass:", pressure_vessel_dry_mass)
+print("pressure_vessel_wet_mass:", pressure_vessel_wet_mass)
+print()
 
 allowable_pitch_error_at_neutral = 1.5  # degrees
 allowable_roll_error_at_neutral = 0.5  # degrees
@@ -124,11 +152,6 @@ foam2_x_left = bladder1_x_right  # m
 foam2_x_right = foam2_x_left + foam2_length  # m
 foam2_x_center = (foam2_x_left + foam2_x_right) / 2  # m
 
-# TODO: fix these
-wing_dry_mass = 1.718  # kg
-wing_wet_mass = 1.698  # kg
-wing_length = 0.248  # m
-wing_displacement = 0.00001950063317  # m^3
 wing_x_left = foam2_x_right
 wing_x_right = wing_x_left + wing_length
 wing_x_center = (wing_x_left + wing_x_right) / 2
@@ -183,8 +206,8 @@ battery2_wet_mass = battery2_dry_mass
 battery2_x_center = vessel4_x_center
 battery2_packing_volume = battery2_capacity / BATTERY_CAPACITY_PER_VOLUME / BATTERY_PACKING_FACTOR
 
-vehicle_total_length = vessel4_x_right
-vehicle_fairing_x_center = vehicle_total_length / 2
+vehicle_inner_length = vessel4_x_right
+vehicle_fairing_x_center = vehicle_inner_length / 2
 
 # movable pitch is completeley below the other modules
 movable_pitch_length = sympy.Symbol("movable_pitch_length")
@@ -193,8 +216,8 @@ movable_pitch_displacement = movable_pitch_volume
 movable_pitch_dry_mass = movable_pitch_volume * LEAD_DENSITY
 movable_pitch_wet_mass = movable_pitch_volume * (LEAD_DENSITY - WATER_DENSITY_AT_SEA_LEVEL)
 movable_pitch_x_center_fwd = movable_pitch_length / 2
-movable_pitch_x_center_aft = vehicle_total_length - movable_pitch_length / 2
-movable_pitch_x_center_mid = vehicle_total_length / 2
+movable_pitch_x_center_aft = vehicle_inner_length - movable_pitch_length / 2
+movable_pitch_x_center_mid = vehicle_inner_length / 2
 movable_pitch_y_center = 0
 movable_pitch_z_center = -(pressure_vessel_outer_diameter + movable_pitch_diameter) / 2
 
@@ -299,7 +322,7 @@ def get_weighted_wet_masses(bladder: str, pitch: str, roll: str) \
 
 battery1_packing_equation = battery1_packing_volume <= pressure_vessel_inner_volume
 battery2_packing_equation = battery2_packing_volume <= pressure_vessel_inner_volume
-battery_capacity_equation = battery1_capacity + battery2_capacity >= 28000.0
+battery_capacity_equation = battery1_capacity + battery2_capacity >= required_battery_capacity
 
 pitch_minimum_mass, pitch_minimum_x_sum, pitch_minimum_y_sum, pitch_minimum_z_sum = \
     get_weighted_wet_masses(bladder="empty", pitch="forward", roll="center")
@@ -331,7 +354,7 @@ constraints = PointFunc({
     "pitch_neutral_equation3": pitch_neutral_equation3,
     "pitch_maximum_equation": pitch_maximum_equation,
     "roll_minimum_equation": roll_minimum_equation,
-    "finess_ratio_equation": vehicle_total_length <= 8 * vehicle_inner_diameter,
+    "finess_ratio_equation": vehicle_inner_length <= 8 * vehicle_inner_diameter,
 })
 
 print(constraints.input_names)
@@ -355,14 +378,12 @@ derived_values = PointFunc({
     "pitch_maximum_angle": atan(pitch_maximum_x_sum / pitch_maximum_z_sum) * 180 / pi,
     "roll_minimum_mass": roll_minimum_mass,
     "roll_minimum_angle": atan(roll_minimum_y_sum / roll_minimum_z_sum) * 180 / pi,
-    "battery_capacity": battery1_capacity + battery2_capacity,
+    "total_battery_capacity": battery1_capacity + battery2_capacity,
     "vehicle_dry_mass": vehicle_dry_mass,
-    "vehicle_total_length": vehicle_total_length,
-    "vehicle_finess_ratio": vehicle_total_length / vehicle_inner_diameter,
+    "vehicle_inner_length": vehicle_inner_length,
+    "vehicle_finess_ratio": vehicle_inner_length / vehicle_inner_diameter,
+    "wing_x_center": wing_x_center,
 })
-
-print("pressure_vessel_inner_volume:", pressure_vessel_inner_volume)
-print("pressure_vessel_dry_mass:", pressure_vessel_dry_mass)
 
 
 def print_solutions(points, num=None):
@@ -379,8 +400,8 @@ def print_solutions(points, num=None):
 
 
 bounds = {
-    "battery1_capacity": (5000.0, 40000.0),
-    "battery2_capacity": (5000.0, 40000.0),
+    "battery1_capacity": (0.0, required_battery_capacity),
+    "battery2_capacity": (0.0, required_battery_capacity),
     "foam1_length": (0.0, 2.0),
     "foam2_length": (0.0, 2.0),
     "foam3_length": (0.0, 2.0),
@@ -401,15 +422,15 @@ points = points.newton_raphson(constraints, bounds)
 errors = constraints(points)
 # errors.print_info()
 
-# check constraints
-points = points.prune_by_tolerances(errors, 0.2)
+# check constraints with loose tolerance
+points = points.prune_by_tolerances(errors, 0.5)
 print(points.num_points)
 
 if points.num_points > 0:
-    for _ in range(2):
+    for _ in range(10):
         points.add_mutations([1000, 1000, 0.1, 0.1, 0.1, 0.1, 0.1], 5000)
         points = points.newton_raphson(constraints, bounds)
-        points = points.prune_by_tolerances(constraints(points), 1e-3)
+        points = points.prune_by_tolerances(constraints(points), 1e-2)
         points = points.prune_close_points([500, 500, 0.05, 0.05, 0.05, 0.05, 0.05])
         print(points.num_points)
 
