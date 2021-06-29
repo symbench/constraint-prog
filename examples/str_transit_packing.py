@@ -14,9 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from re import fullmatch
 import sympy
-from sympy import pi, cos, sin, tan, sqrt, log, exp, ceiling
+from sympy import pi
 
 WATER_DENSITY_AT_SEA_LEVEL = 1027.0  # kg/m^3
 OIL_DENSITY = 837.0  # kg/m^3
