@@ -543,6 +543,7 @@ target_func = PointFunc({
     "total_battery_capacity": battery1_capacity + battery2_capacity,
     "vehicle_dry_mass": vehicle_dry_mass,
     "vehicle_inner_length": vehicle_inner_length,
+    "wing_x_center": wing_x_center,
 })
 
 for _ in range(5):
@@ -552,12 +553,12 @@ for _ in range(5):
     points.add_mutations([1000, 1000, 0.1, 0.1, 0.1, 0.1, 0.1], 10000)
     points = points.newton_raphson(constraints, bounds)
     points = points.prune_by_tolerances(constraints(points), 0.1)
-    points = points.prune_close_points([500, 500, 0.05, 0.05, 0.05, 0.05, 0.05])
+    points = points.prune_close_points([1000, 1000, 0.2, 0.2, 0.2, 0.1, 0.1])
     # points2 = points.extend(target_func(points))
     print(points.num_points)
 
 if points.num_points:
     target_func(points).plot2d(0, 1)
-    target_func(points).plot2d(0, 2)
-    target_func(points).plot2d(1, 2)
+    # target_func(points).plot2d(0, 2)
+    target_func(points).plot2d(2, 3)
     print_solutions(points, 10)
