@@ -73,7 +73,8 @@ aluminum_stress_failure_sphere = (glider_crush_pressure * 0.5 * pressure_vessel_
 
 # pressure_vessel_thickness_cylinder = max(aluminum_buckling_failure_cylinder, aluminum_stress_failure_cylinder) * \
 #     pressure_vessel_outer_diameter
-pressure_vessel_thickness_sphere = max(aluminum_buckling_failure_sphere, aluminum_stress_failure_sphere)
+pressure_vessel_thickness_sphere = max(
+    aluminum_buckling_failure_sphere, aluminum_stress_failure_sphere)
 pressure_vessel_inner_diameter = pressure_vessel_outer_diameter - 2 * pressure_vessel_thickness_sphere
 pressure_vessel_outer_volume = pi / 6 \
     * (pressure_vessel_outer_diameter ** 3)  # m^3
@@ -199,6 +200,7 @@ battery2_packing_volume = battery2_capacity / BATTERY_CAPACITY_PER_VOLUME / BATT
 
 vehicle_inner_length = vessel4_x_right
 vehicle_fairing_x_center = vehicle_inner_length / 2
+vehicle_fairing_z_center = (pressure_vessel_outer_diameter - vehicle_inner_diameter) / 2
 
 # movable pitch is completeley below the other modules
 movable_pitch_length = sympy.Symbol("movable_pitch_length")
@@ -208,14 +210,7 @@ movable_pitch_displacement = movable_pitch_volume * WATER_DENSITY_AT_SEA_LEVEL
 movable_pitch_x_center_fwd = movable_pitch_length / 2
 movable_pitch_x_center_aft = vehicle_inner_length - movable_pitch_length / 2
 movable_pitch_x_center_mid = vehicle_inner_length / 2
-movable_pitch_y_center = 0
 movable_pitch_z_center = -(pressure_vessel_outer_diameter + movable_pitch_diameter) / 2
-
-vehicle_dry_mass = foam1_dry_mass + vessel1_dry_mass + battery1_dry_mass + \
-    vessel2_dry_mass + reservoir1_dry_mass_half + bladder1_dry_mass_half + \
-    foam2_dry_mass + wing_dry_mass + movable_roll_dry_mass + vessel3_dry_mass + \
-    electronics_dry_mass + foam3_dry_mass + vessel4_dry_mass + battery2_dry_mass + \
-    movable_pitch_dry_mass
 
 
 def get_center_of_gravity(bladder: str, pitch: str, roll: str) \
@@ -295,8 +290,11 @@ def get_center_of_gravity(bladder: str, pitch: str, roll: str) \
     total_mass += battery2_dry_mass
     total_x_sum += battery2_dry_mass * battery2_x_center
 
+    total_mass += vehicle_fairing_dry_mass
+    total_x_sum += vehicle_fairing_dry_mass * vehicle_fairing_x_center
+    total_z_sum += vehicle_fairing_dry_mass * vehicle_fairing_z_center
+
     total_mass += movable_pitch_dry_mass
-    total_y_sum += movable_pitch_dry_mass * movable_pitch_y_center
     total_z_sum += movable_pitch_dry_mass * movable_pitch_z_center
     if pitch == "forward":
         total_x_sum += movable_pitch_dry_mass * movable_pitch_x_center_fwd
@@ -366,8 +364,11 @@ def get_center_of_buoyancy(bladder: str, pitch: str, roll: str) \
     total_mass += vessel4_displacement
     total_x_sum += vessel4_displacement * vessel4_x_center
 
+    total_mass += vehicle_fairing_displacement
+    total_x_sum += vehicle_fairing_displacement * vehicle_fairing_x_center
+    total_z_sum += vehicle_fairing_displacement * vehicle_fairing_z_center
+
     total_mass += movable_pitch_displacement
-    total_y_sum += movable_pitch_displacement * movable_pitch_y_center
     total_z_sum += movable_pitch_displacement * movable_pitch_z_center
     if pitch == "forward":
         total_x_sum += movable_pitch_displacement * movable_pitch_x_center_fwd
@@ -386,6 +387,8 @@ def get_buoyancy_minus_gravity(bladder: str, pitch: str, roll: str) \
     cg_mass, cg_x, cg_y, cg_z = get_center_of_gravity(bladder, pitch, roll)
     return cb_mass - cg_mass, cb_x - cg_x, cb_y - cg_y, cb_z - cg_z
 
+
+vehicle_dry_mass, _, _, _ = get_center_of_gravity("half", "middle", "center")
 
 battery1_packing_equation = battery1_packing_volume <= pressure_vessel_inner_volume
 battery2_packing_equation = battery2_packing_volume <= pressure_vessel_inner_volume
@@ -423,22 +426,13 @@ constraints = PointFunc({
     "roll_minimum_equation": roll_minimum_equation,
     "finess_ratio_equation": vehicle_inner_length <= 8 * vehicle_inner_diameter,
     # "roll_dry_mass_equation": movable_roll_dry_mass <= 20,
-    "vehicle_dry_mass_equation": vehicle_dry_mass <= 170,
+    "vehicle_dry_mass_equation": vehicle_dry_mass <= 200,
 })
 
 print(constraints.input_names)
 print(constraints.output_names)
 
 derived_values = PointFunc({
-    "battery1_packing_volume": battery1_packing_volume,
-    "battery2_packing_volume": battery2_packing_volume,
-    "battery1_dry_mass": battery1_dry_mass,
-    "battery2_dry_mass": battery2_dry_mass,
-    "foam1_dry_mass": foam1_dry_mass,
-    "foam2_dry_mass": foam2_dry_mass,
-    "foam3_dry_mass": foam3_dry_mass,
-    "movable_pitch_dry_mass": movable_pitch_dry_mass,
-    "movable_roll_dry_mass": movable_roll_dry_mass,
     "pitch_minimum_buoyancy": pitch_minimum_cbmg_buoyancy,
     "pitch_minimum_angle": atan(-pitch_minimum_cbmg_x / pitch_minimum_cbmg_z) * 180 / pi,
     "pitch_neutral_buoyancy": pitch_neutral_cbmg_buoyancy,
@@ -447,12 +441,48 @@ derived_values = PointFunc({
     "pitch_maximum_angle": atan(-pitch_maximum_cbmg_x / pitch_maximum_cbmg_z) * 180 / pi,
     "roll_minimum_mass": roll_minimum_cbmg_buoyancy,
     "roll_minimum_angle": atan(-roll_minimum_cbmg_y / roll_minimum_cbmg_z) * 180 / pi,
+    "foam1_x_center": foam1_x_center,
+    "foam1_dry_mass": foam1_dry_mass,
+    "vessel1_x_center": vessel1_x_center,
+    "battery1_x_center": battery1_x_center,
+    "battery1_packing_volume": battery1_packing_volume,
+    "battery1_dry_mass": battery1_dry_mass,
+    "vessel2_x_center": vessel2_x_center,
+    "reservoir1_x_center": reservoir1_x_center,
+    "reservoir1_dry_mass_full": reservoir1_dry_mass_full,
+    "bladder1_length_full": bladder1_length_full,
+    "bladder1_x_center": bladder1_x_center,
+    "wing_x_center": wing_x_center,
+    "wing_z_center": wing_z_center,
+    "wing_dry_mass": wing_dry_mass,
+    "movable_roll_x_center": movable_roll_x_center,
+    "movable_roll_y_center_prt": movable_roll_y_center_prt,
+    "movable_roll_y_center_mid": movable_roll_y_center_mid,
+    "movable_roll_y_center_stb": movable_roll_y_center_stb,
+    "movable_roll_z_center": movable_roll_z_center,
+    "movable_roll_dry_mass": movable_roll_dry_mass,
+    "foam2_x_center": foam2_x_center,
+    "foam2_dry_mass": foam2_dry_mass,
+    "vessel3_x_center": vessel3_x_center,
+    "electronics_x_center": electronics_x_center,
+    "electronics_dry_mass": electronics_dry_mass,
+    "vessel4_x_center": vessel4_x_center,
+    "battery2_x_center": battery2_x_center,
+    "battery2_packing_volume": battery2_packing_volume,
+    "battery2_dry_mass": battery2_dry_mass,
+    "foam3_x_center": foam3_x_center,
+    "foam3_dry_mass": foam3_dry_mass,
+    "movable_pitch_x_center_fwd": movable_pitch_x_center_fwd,
+    "movable_pitch_x_center_mid": movable_pitch_x_center_mid,
+    "movable_pitch_x_center_aft": movable_pitch_x_center_aft,
+    "movable_pitch_z_center": movable_pitch_z_center,
+    "movable_pitch_dry_mass": movable_pitch_dry_mass,
+    "vehicle_fairing_x_center": vehicle_fairing_x_center,
+    "vehicle_fairing_z_center": vehicle_fairing_z_center,
     "total_battery_capacity": battery1_capacity + battery2_capacity,
     "vehicle_dry_mass": vehicle_dry_mass,
     "vehicle_inner_length": vehicle_inner_length,
     "vehicle_finess_ratio": vehicle_inner_length / vehicle_inner_diameter,
-    "wing_x_center": wing_x_center,
-    "wing_z_center": wing_z_center,
 })
 
 

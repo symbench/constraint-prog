@@ -55,7 +55,11 @@ class PointCloud:
 
         # check whether all variables are unique
         total_vars = self.float_vars + self.string_vars
-        assert len(numpy.unique(total_vars)) == len(total_vars)
+        if len(numpy.unique(total_vars)) != len(total_vars):
+            elems = list(total_vars)
+            for e in numpy.unique(total_vars):
+                elems.remove(e)
+            raise ValueError("multiple keys: " + ", ".join(elems))
 
     @property
     def num_float_vars(self):
