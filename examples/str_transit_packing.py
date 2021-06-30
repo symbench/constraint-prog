@@ -45,8 +45,8 @@ GRAVITATIONAL_CONSTANT = 9.806  # m/s^2
 # design constants
 vehicle_fairing_dry_mass = 8.822  # kg
 vehicle_fairing_displacement = 0.0  # kg
-vehicle_inner_diameter = 0.36   # m
-movable_pitch_diameter = 0.05   # m
+vehicle_inner_diameter = 0.35   # m
+movable_pitch_diameter = 0.02   # m
 movable_roll_height = 0.10  # m
 wing_dry_mass = 1.718  # kg
 wing_displacement = 2.520  # kg
@@ -432,7 +432,7 @@ constraints = PointFunc({
     "pitch_neutral_equation3": pitch_neutral_equation3,
     "pitch_maximum_equation": pitch_maximum_equation,
     "roll_minimum_equation": roll_minimum_equation,
-    "finess_ratio_equation": vehicle_inner_length <= 8 * vehicle_inner_diameter,
+    # "finess_ratio_equation": vehicle_inner_length <= 10 * vehicle_inner_diameter,
     # "roll_dry_mass_equation": movable_roll_dry_mass <= 20,
     # "vehicle_dry_mass_equation": vehicle_dry_mass <= 190,
 })
@@ -525,7 +525,7 @@ bounds = {
 assert list(bounds.keys()) == list(constraints.input_names)
 
 # generate random points
-points = PointCloud.generate(bounds, 5000)
+points = PointCloud.generate(bounds, 10000)
 
 # minimize errors with newton raphson
 points = points.newton_raphson(constraints, bounds)
@@ -539,16 +539,25 @@ errors = constraints(points)
 points = points.prune_by_tolerances(errors, 0.5)
 print(points.num_points)
 
+target_func = PointFunc({
+    "total_battery_capacity": battery1_capacity + battery2_capacity,
+    "vehicle_dry_mass": vehicle_dry_mass,
+    "vehicle_inner_length": vehicle_inner_length,
+})
+
 for _ in range(5):
     if not points.num_points:
         print("no points left")
         break
-    points.add_mutations([1000, 1000, 0.1, 0.1, 0.1, 0.1, 0.1], 5000)
+    points.add_mutations([1000, 1000, 0.1, 0.1, 0.1, 0.1, 0.1], 10000)
     points = points.newton_raphson(constraints, bounds)
     points = points.prune_by_tolerances(constraints(points), 0.1)
     points = points.prune_close_points([500, 500, 0.05, 0.05, 0.05, 0.05, 0.05])
+    # points2 = points.extend(target_func(points))
     print(points.num_points)
 
 if points.num_points:
-    points.plot2d(2, 3)
+    target_func(points).plot2d(0, 1)
+    target_func(points).plot2d(0, 2)
+    target_func(points).plot2d(1, 2)
     print_solutions(points, 10)
