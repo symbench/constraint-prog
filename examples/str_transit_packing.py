@@ -45,7 +45,7 @@ GRAVITATIONAL_CONSTANT = 9.806  # m/s^2
 # design constants
 vehicle_fairing_dry_mass = 8.822  # kg
 vehicle_fairing_displacement = 0.0  # kg
-vehicle_inner_diameter = 0.43   # m
+vehicle_inner_diameter = 0.36   # m
 movable_pitch_diameter = 0.05   # m
 movable_roll_height = 0.10  # m
 wing_dry_mass = 1.718  # kg
@@ -54,6 +54,7 @@ wing_length = 0.248  # m
 wing_thickness = 0.015  # m
 required_battery_capacity = 28000  # Wh
 glider_depth_rating = 3000  # m
+required_buoyancy_force = 32  # N
 
 # calculated automatically
 pressure_vessel_outer_diameter = vehicle_inner_diameter - movable_pitch_diameter  # m
@@ -83,6 +84,9 @@ pressure_vessel_inner_volume = pi / 6 \
 pressure_vessel_dry_mass = (pressure_vessel_outer_volume - pressure_vessel_inner_volume) \
     * ALUMINIUM_DENSITY  # kg
 pressure_vessel_displacement = pressure_vessel_outer_volume * WATER_DENSITY_AT_SEA_LEVEL
+
+if pressure_vessel_inner_volume * WATER_DENSITY_AT_SEA_LEVEL / 2 < required_buoyancy_force / GRAVITATIONAL_CONSTANT:
+    print("not enough buoyancy force")
 
 print("pressure_vessel_outer_diameter:", pressure_vessel_outer_diameter)
 print("pressure_vessel_inner_diameter:", pressure_vessel_inner_diameter)
@@ -400,7 +404,8 @@ battery_capacity_equation = battery1_capacity + battery2_capacity >= required_ba
 pitch_minimum_cbmg_buoyancy, pitch_minimum_cbmg_x, pitch_minimum_cbmg_y, pitch_minimum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="empty", pitch="forward", roll="center")
 pitch_minimum_equation1 = -pitch_minimum_cbmg_x / pitch_minimum_cbmg_z <= math.tan(-60 * pi / 180)
-pitch_minimum_equation2 = pitch_minimum_cbmg_buoyancy <= -10.0  # sinks to bottom
+pitch_minimum_equation2 = pitch_minimum_cbmg_buoyancy <= \
+    -required_buoyancy_force / GRAVITATIONAL_CONSTANT  # sinks to bottom
 
 pitch_maximum_cbmg_buoyancy, pitch_maximum_cbmg_x, pitch_maximum_cbmg_y, pitch_maximum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="full", pitch="aft", roll="center")
@@ -410,7 +415,7 @@ pitch_neutral_cbmg_buoyancy, pitch_neutral_cbmg_x, pitch_neutral_cbmg_y, pitch_n
     get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="center")
 pitch_neutral_equation1 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(1.5 * pi / 180)
 pitch_neutral_equation2 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-1.5 * pi / 180)
-pitch_neutral_equation3 = pitch_neutral_cbmg_buoyancy >= 2.0  # floats to surface
+pitch_neutral_equation3 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
 
 roll_minimum_cbmg_buoyancy, roll_minimum_cbmg_x, roll_minimum_cbmg_y, roll_minimum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port")
@@ -429,7 +434,7 @@ constraints = PointFunc({
     "roll_minimum_equation": roll_minimum_equation,
     "finess_ratio_equation": vehicle_inner_length <= 8 * vehicle_inner_diameter,
     # "roll_dry_mass_equation": movable_roll_dry_mass <= 20,
-    "vehicle_dry_mass_equation": vehicle_dry_mass <= 190,
+    # "vehicle_dry_mass_equation": vehicle_dry_mass <= 190,
 })
 
 print(constraints.input_names)
