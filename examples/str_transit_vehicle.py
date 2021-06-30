@@ -171,8 +171,8 @@ vehicle_tail_wetted_area = 2 * pi * pow(((pow(vehicle_diameter_external/2.0, 1.6
 vehicle_center_wetted_area = pi * vehicle_diameter_external * vehicle_uniform_center_length
 total_vehicle_frontal_area = pi * pow((vehicle_diameter_external / 2.0), 2)
 total_vehicle_wetted_area = vehicle_nose_wetted_area + vehicle_tail_wetted_area + vehicle_center_wetted_area + wing_wetted_area
-vehicle_fairing_mass = vehicle_fairing_material_density * total_vehicle_wetted_area * vehicle_fairing_thickness
-vehicle_fairing_wet_mass = vehicle_fairing_mass - (total_vehicle_wetted_area * vehicle_fairing_thickness * WATER_DENSITY_AT_SEA_LEVEL)
+vehicle_fairing_mass = vehicle_fairing_material_density * (total_vehicle_wetted_area - wing_wetted_area) * vehicle_fairing_thickness
+vehicle_fairing_displacement = WATER_DENSITY_AT_SEA_LEVEL * (total_vehicle_wetted_area - wing_wetted_area) * vehicle_fairing_thickness
 
 
 # MISSION SPEED EXPRESSIONS -------------------------------------------------------------------------------------------
@@ -252,7 +252,8 @@ wing_root_chord = wing_area_calculated / ((2.0 * single_wing_length) * (wing_tap
 wing_tip_chord = wing_taper_ratio * wing_root_chord
 wing_mass = (wing_total_area * wing_material_thickness * vehicle_fairing_material_density) + \
    ((wing_volume - (wing_total_area * wing_material_thickness)) * syntactic_foam_density)
-wing_wet_mass = wing_mass - (wing_volume * WATER_DENSITY_AT_SEA_LEVEL)
+wing_displacement = wing_volume * WATER_DENSITY_AT_SEA_LEVEL
+wing_thickness = 0.06 * wing_root_chord
 
 
 # INTERNAL MODULE EXPRESSIONS -----------------------------------------------------------------------------------------
@@ -313,9 +314,9 @@ if __name__ == '__main__':
       'water_density_at_rated_dive_depth': water_density_at_maximum_depth,
       'water_absolute_viscosity_at_rated_dive_depth': seawater_absolute_viscosity,
       'water_kinematic_viscosity_at_rated_dive_depth': seawater_kinematic_viscosity,
-      'vehicle_fairing_mass': vehicle_fairing_mass,
-      'vehicle_fairing_wet_mass': vehicle_fairing_wet_mass,
-      'vehicle_diameter_internal': vehicle_diameter_internal,
+      'vehicle_fairing_dry_mass': vehicle_fairing_mass,
+      'vehicle_fairing_displacement': vehicle_fairing_displacement,
+      'vehicle_inner_diameter': vehicle_diameter_internal,
       'vehicle_uniform_center_length': vehicle_uniform_center_length,
       'vehicle_frontal_area': total_vehicle_frontal_area,
       'vehicle_nose_wetted_area': vehicle_nose_wetted_area,
@@ -330,7 +331,7 @@ if __name__ == '__main__':
       'maximum_form_drag_force': maximum_form_drag_force,
       'maximum_friction_drag_force': maximum_friction_drag_force,
       'nominal_buoyancy_force_required': nominal_buoyancy_required,
-      'maximum_buoyancy_force_required': maximum_buoyancy_required,
+      'required_buoyancy_force': maximum_buoyancy_required,
       'buoyancy_engine_fluid_mass': buoyancy_engine_fluid_mass,
       'buoyancy_engine_fluid_volume': buoyancy_engine_fluid_volume,
       'buoyancy_engine_reservoir_volume': buoyancy_engine_reservoir_volume,
@@ -380,10 +381,11 @@ if __name__ == '__main__':
       'wing_total_area': wing_total_area,
       'wing_aspect_ratio': wing_aspect_ratio,
       'wing_mean_chord': wing_mean_chord,
-      'wing_root_chord': wing_root_chord,
+      'wing_length': wing_root_chord,
       'wing_tip_chord': wing_tip_chord,
-      'wing_mass': wing_mass,
-      'wing_wet_mass': wing_wet_mass
+      'wing_dry_mass': wing_mass,
+      'wing_thickness': wing_thickness,
+      'wing_displacement': wing_displacement
    })
 
    # Concretely specify parameters from the STR spreadsheet
@@ -466,16 +468,9 @@ if __name__ == '__main__':
          print(var + ":", solutions.float_data[sol, idx].item())
    
    # Output the relevant parameters for Miklos
-   # Translation from these parameters to str_transit_packing.py:
-   # vehicle_fairing_wet_mass -> vehicle_fairing_wet_mass
-   # vehicle_diameter_internal -> vehicle_inner_diameter
-   # wing_root_chord -> wing_length
-   # wing_mass -> wing_dry_mass
-   # wing_wet_mass -> wing_wet_mass
-   # required_battery_capacity -> required_battery_capacity
    print()
    for sol in range(solutions.num_points):
       for idx, var in enumerate(solutions.float_vars):
-         if var in ['vehicle_fairing_wet_mass', 'vehicle_diameter_internal', 'wing_root_chord',
-                    'wing_mass', 'wing_wet_mass', 'required_battery_capacity']:
+         if var in ['vehicle_fairing_dry_mass', 'vehicle_fairing_displacement', 'vehicle_inner_diameter', 'wing_dry_mass', 
+                    'wing_displacement', 'wing_length', 'wing_thickness', 'required_battery_capacity', 'required_buoyancy_force']:
             print(var + ":", solutions.float_data[sol, idx].item())
