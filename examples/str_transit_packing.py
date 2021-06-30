@@ -422,6 +422,8 @@ constraints = PointFunc({
     "pitch_maximum_equation": pitch_maximum_equation,
     "roll_minimum_equation": roll_minimum_equation,
     "finess_ratio_equation": vehicle_inner_length <= 8 * vehicle_inner_diameter,
+    # "roll_dry_mass_equation": movable_roll_dry_mass <= 20,
+    "vehicle_dry_mass_equation": vehicle_dry_mass <= 170,
 })
 
 print(constraints.input_names)
