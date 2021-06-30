@@ -97,9 +97,7 @@ electronics_module_external_center_length = sympy.Symbol('electronics_module_ext
 rudder_wetted_area = sympy.Symbol('rudder_wetted_area')  # m^2
 wing_span = sympy.Symbol('wing_span')  # m
 wing_taper_ratio = sympy.Symbol('wing_taper_ratio')  # %
-wing_volume = sympy.Symbol('wing_volume')  # m^3
 wing_wetted_area = sympy.Symbol('wing_wetted_area')  # m^2
-wing_total_area = sympy.Symbol('wing_total_area')  # m^2
 wing_material_thickness = sympy.Symbol('wing_material_thickness')  # m
 wing_coefficient_of_lift = sympy.Symbol('wing_coefficient_of_lift')
 
@@ -245,15 +243,16 @@ syntactic_foam_density = sympy.Piecewise((320.0, vehicle_depth_rating <= 500.0),
 maximum_lift_drag_ratio = 1.0 / tan(mpmath.radians(minimum_glide_slope))
 minimum_wing_lift = (nominal_form_drag_force + nominal_friction_drag_force) * maximum_lift_drag_ratio
 single_wing_length = 0.5 * (wing_span - vehicle_diameter_external)
-wing_area_calculated = (2.0 * minimum_wing_lift) / (WATER_DENSITY_AT_SEA_LEVEL * nominal_glide_speed * nominal_glide_speed * wing_coefficient_of_lift)
-wing_aspect_ratio = (wing_span * wing_span) / wing_area_calculated
-wing_mean_chord = wing_area_calculated / (2.0 * single_wing_length)
-wing_root_chord = wing_area_calculated / ((2.0 * single_wing_length) * (wing_taper_ratio + ((1.0 - wing_taper_ratio) / 2.0)))
+wing_surface_area = (2.0 * minimum_wing_lift) / (WATER_DENSITY_AT_SEA_LEVEL * nominal_glide_speed * nominal_glide_speed * wing_coefficient_of_lift)
+wing_aspect_ratio = (wing_span * wing_span) / wing_surface_area
+wing_mean_chord = wing_surface_area / (2.0 * single_wing_length)
+wing_root_chord = wing_surface_area / ((2.0 * single_wing_length) * (wing_taper_ratio + ((1.0 - wing_taper_ratio) / 2.0)))
 wing_tip_chord = wing_taper_ratio * wing_root_chord
-wing_mass = (wing_total_area * wing_material_thickness * vehicle_fairing_material_density) + \
-   ((wing_volume - (wing_total_area * wing_material_thickness)) * syntactic_foam_density)
-wing_displacement = wing_volume * WATER_DENSITY_AT_SEA_LEVEL
 wing_thickness = 0.06 * wing_root_chord
+wing_volume = wing_mean_chord * wing_span * wing_thickness #wing_surface_area * wing_thickness
+wing_mass = (wing_surface_area * wing_material_thickness * vehicle_fairing_material_density) + \
+   ((wing_volume - (wing_surface_area * wing_material_thickness)) * syntactic_foam_density)
+wing_displacement = wing_volume * WATER_DENSITY_AT_SEA_LEVEL
 
 
 # INTERNAL MODULE EXPRESSIONS -----------------------------------------------------------------------------------------
@@ -378,7 +377,6 @@ if __name__ == '__main__':
       'maximum_ld_ratio': maximum_lift_drag_ratio,
       'minimum_wing_lift': minimum_wing_lift,
       'wing_wetted_area': wing_wetted_area,
-      'wing_total_area': wing_total_area,
       'wing_aspect_ratio': wing_aspect_ratio,
       'wing_mean_chord': wing_mean_chord,
       'wing_length': wing_root_chord,
@@ -453,9 +451,7 @@ if __name__ == '__main__':
       'electronics_module_external_tail_length': 0.0,
       'wing_span': 1.5178,
       'wing_taper_ratio': 0.3,
-      'wing_volume': 0.002454,
       'wing_wetted_area': 0.28096,
-      'wing_total_area': 0.4137,
       'wing_material_thickness': 0.001524,
       'wing_coefficient_of_lift': 0.4545
    }
