@@ -396,7 +396,7 @@ if __name__ == '__main__':
       'mission_water_salinity': 34,
       'mission_minimum_water_temperature': 2.0,
       #'vehicle_length_external': 2.4892,
-      'vehicle_diameter_external': 0.3556,
+      'vehicle_diameter_external': 0.36 + 0.0095504,
       'vehicle_fairing_thickness': 0.0047752,
       'vehicle_fairing_material_density': 1522.4,
       'vehicle_nose_length': 0.3556,
@@ -463,9 +463,9 @@ if __name__ == '__main__':
    # Output the derived parameter values
    solutions = derived_values(PointCloud(list(spreadsheet.keys()),
       torch.Tensor(list(spreadsheet.values())).view(1, -1)))
-   for sol in range(solutions.num_points):
-      for idx, var in enumerate(solutions.float_vars):
-         print(var + ":", solutions.float_data[sol, idx].item())
+   # for sol in range(solutions.num_points):
+   #    for idx, var in enumerate(solutions.float_vars):
+   #       print(var + ":", solutions.float_data[sol, idx].item())
    
    # Output the relevant parameters for Miklos
    print()
@@ -473,4 +473,4 @@ if __name__ == '__main__':
       for idx, var in enumerate(solutions.float_vars):
          if var in ['vehicle_fairing_dry_mass', 'vehicle_fairing_displacement', 'vehicle_inner_diameter', 'wing_dry_mass', 
                     'wing_displacement', 'wing_length', 'wing_thickness', 'required_battery_capacity', 'required_buoyancy_force']:
-            print(var + ":", solutions.float_data[sol, idx].item())
+            print(var + " =", solutions.float_data[sol, idx].item())
