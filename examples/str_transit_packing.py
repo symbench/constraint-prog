@@ -47,11 +47,11 @@ vehicle_fairing_dry_mass = 8.822  # kg
 vehicle_fairing_displacement = 0.0  # kg
 vehicle_inner_diameter = 0.43   # m
 movable_pitch_diameter = 0.05   # m
-movable_roll_length = 0.50  # m
+movable_roll_height = 0.10  # m
 wing_dry_mass = 1.718  # kg
-wing_displacement = 0.019  # kg
+wing_displacement = 2.520  # kg
 wing_length = 0.248  # m
-wing_z_offset = 0.1  # m
+wing_thickness = 0.015  # m
 required_battery_capacity = 28000  # Wh
 glider_depth_rating = 3000  # m
 
@@ -157,23 +157,23 @@ foam2_z_center = -movable_pitch_diameter / 2
 wing_x_left = foam2_x_right
 wing_x_right = wing_x_left + wing_length
 wing_x_center = (wing_x_left + wing_x_right) / 2
-wing_z_center = (pressure_vessel_outer_diameter - vehicle_inner_diameter) / 2 + wing_z_offset
+wing_z_center = -movable_pitch_diameter / 2 + movable_roll_height / 2 + wing_thickness / 2
 
-movable_roll_diameter = sympy.Symbol("movable_roll_diameter")
-movable_roll_volume = movable_roll_length * pi / 4 * movable_roll_diameter ** 2
+movable_roll_length = wing_length
+movable_roll_width = sympy.Symbol("movable_roll_width")
+movable_roll_volume = movable_roll_length * movable_roll_width * movable_roll_height
 movable_roll_dry_mass = movable_roll_volume * LEAD_DENSITY
 movable_roll_displacement = movable_roll_volume * WATER_DENSITY_AT_SEA_LEVEL
-movable_roll_x_left = wing_x_right
-movable_roll_x_right = movable_roll_x_left + movable_roll_length
-movable_roll_x_center = (movable_roll_x_left + movable_roll_x_right) / 2
-movable_roll_y_center_stb = (pressure_vessel_outer_diameter - movable_roll_diameter) / 2
+movable_roll_x_center = wing_x_center
+movable_roll_y_center_stb = vehicle_inner_diameter / 2 - \
+    movable_roll_width / 2 - 0.05  # TODO: look out for magic
 movable_roll_y_center_mid = 0
 movable_roll_y_center_prt = -movable_roll_y_center_stb
-movable_roll_z_center = (pressure_vessel_outer_diameter - vehicle_inner_diameter) / 2
+movable_roll_z_center = -movable_pitch_diameter / 2
 
 vessel3_dry_mass = pressure_vessel_dry_mass
 vessel3_displacement = pressure_vessel_displacement
-vessel3_x_left = movable_roll_x_right
+vessel3_x_left = wing_x_right
 vessel3_x_right = vessel3_x_left + pressure_vessel_outer_diameter
 vessel3_x_center = (vessel3_x_left + vessel3_x_right) / 2
 
@@ -429,7 +429,7 @@ constraints = PointFunc({
     "roll_minimum_equation": roll_minimum_equation,
     "finess_ratio_equation": vehicle_inner_length <= 8 * vehicle_inner_diameter,
     # "roll_dry_mass_equation": movable_roll_dry_mass <= 20,
-    "vehicle_dry_mass_equation": vehicle_dry_mass <= 200,
+    "vehicle_dry_mass_equation": vehicle_dry_mass <= 190,
 })
 
 print(constraints.input_names)
@@ -442,7 +442,6 @@ derived_values = PointFunc({
     "pitch_neutral_angle": atan(-pitch_neutral_cbmg_x / pitch_neutral_cbmg_z) * 180 / pi,
     "pitch_maximum_buoyancy": pitch_maximum_cbmg_buoyancy,
     "pitch_maximum_angle": atan(-pitch_maximum_cbmg_x / pitch_maximum_cbmg_z) * 180 / pi,
-    "roll_minimum_mass": roll_minimum_cbmg_buoyancy,
     "roll_minimum_angle": atan(-roll_minimum_cbmg_y / roll_minimum_cbmg_z) * 180 / pi,
     "foam1_x_center": foam1_x_center,
     "foam1_z_center": foam1_z_center,
@@ -515,7 +514,7 @@ bounds = {
     "foam2_length": (0.0, 2.0),
     "foam3_length": (0.0, 2.0),
     "movable_pitch_length": (0.10, 1.0),
-    "movable_roll_diameter": (0.05, 0.5),
+    "movable_roll_width": (0.05, 0.5),
 }
 
 assert list(bounds.keys()) == list(constraints.input_names)
