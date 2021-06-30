@@ -466,6 +466,13 @@ if __name__ == '__main__':
          print(var + ":", solutions.float_data[sol, idx].item())
    
    # Output the relevant parameters for Miklos
+   # Translation from these parameters to str_transit_packing.py:
+   # vehicle_fairing_wet_mass -> vehicle_fairing_wet_mass
+   # vehicle_diameter_internal -> vehicle_inner_diameter
+   # wing_root_chord -> wing_length
+   # wing_mass -> wing_dry_mass
+   # wing_wet_mass -> wing_wet_mass
+   # required_battery_capacity -> required_battery_capacity
    print()
    for sol in range(solutions.num_points):
       for idx, var in enumerate(solutions.float_vars):
