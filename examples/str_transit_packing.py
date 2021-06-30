@@ -42,19 +42,21 @@ BATTERY_PACKING_FACTOR = 0.85
 DEPTH_RATING_SAFETY_FACTOR = 1.25
 GRAVITATIONAL_CONSTANT = 9.806  # m/s^2
 
+# coming from vehicle design
+vehicle_fairing_dry_mass = 29.418413162231445
+vehicle_fairing_displacement = 19.845449447631836
+vehicle_inner_diameter = 0.4000000059604645
+required_buoyancy_force = 42.00310134887695
+required_battery_capacity = 37048.67578125
+wing_length = 0.3588591516017914
+wing_dry_mass = 3.6070632934570312
+wing_thickness = 0.021531548351049423
+wing_displacement = 7.8288445472717285
+
 # design constants
-vehicle_fairing_dry_mass = 8.822  # kg
-vehicle_fairing_displacement = 0.0  # kg
-vehicle_inner_diameter = 0.35   # m
 movable_pitch_diameter = 0.02   # m
 movable_roll_height = 0.10  # m
-wing_dry_mass = 1.718  # kg
-wing_displacement = 2.520  # kg
-wing_length = 0.248  # m
-wing_thickness = 0.015  # m
-required_battery_capacity = 28000  # Wh
 glider_depth_rating = 3000  # m
-required_buoyancy_force = 32  # N
 
 # calculated automatically
 pressure_vessel_outer_diameter = vehicle_inner_diameter - movable_pitch_diameter  # m
@@ -544,6 +546,10 @@ target_func = PointFunc({
     "vehicle_dry_mass": vehicle_dry_mass,
     "vehicle_inner_length": vehicle_inner_length,
     "wing_x_center": wing_x_center,
+    "pitch_minimum_angle": atan(-pitch_minimum_cbmg_x / pitch_minimum_cbmg_z) * 180 / pi,
+    "roll_minimum_angle": atan(-roll_minimum_cbmg_y / roll_minimum_cbmg_z) * 180 / pi,
+    "battery1_capacity": battery1_capacity,
+    "foam1_length": foam1_length,
 })
 
 for _ in range(5):
@@ -561,4 +567,8 @@ if points.num_points:
     target_func(points).plot2d(0, 1)
     # target_func(points).plot2d(0, 2)
     target_func(points).plot2d(2, 3)
+    target_func(points).plot2d(4, 5)
+    target_func(points).plot2d(6, 7)
     print_solutions(points, 10)
+    points2 = points.extend(derived_values(points, equs_as_float=False))
+    points2.save("str_transit_packing.csv")

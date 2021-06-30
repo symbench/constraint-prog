@@ -394,7 +394,7 @@ if __name__ == '__main__':
       'mission_water_salinity': 34,
       'mission_minimum_water_temperature': 2.0,
       #'vehicle_length_external': 2.4892,
-      'vehicle_diameter_external': 0.36 + 0.0095504,
+      'vehicle_diameter_external': 0.40 + 0.0095504,
       'vehicle_fairing_thickness': 0.0047752,
       'vehicle_fairing_material_density': 1522.4,
       'vehicle_nose_length': 0.3556,
