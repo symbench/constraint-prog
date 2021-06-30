@@ -16,8 +16,9 @@
 
 import mpmath
 import sympy
-
+import torch
 from sympy import pi, cos, sin, tan, sqrt, log, exp, ceiling
+from constraint_prog.point_cloud import PointCloud, PointFunc
 
 
 # CONSTANTS AND ASSUMED VALUES ----------------------------------------------------------------------------------------
@@ -43,13 +44,19 @@ vehicle_nose_length = sympy.Symbol('vehicle_nose_length')  # m
 vehicle_tail_length = sympy.Symbol('vehicle_tail_length')  # m
 vehicle_depth_rating = sympy.Symbol('vehicle_depth_rating')  # m
 vehicle_material_density = sympy.Symbol('vehicle_material_density')  # g/cm^3
+vehicle_material_youngs_modulus = sympy.Symbol('vehicle_material_youngs_modulus')  # Pa
+vehicle_material_yield_stress = sympy.Symbol('vehicle_material_yield_stress')  # Pa
+vehicle_material_poissons_ratio = sympy.Symbol('vehicle_material_poissons_ratio')
 payload_power_draw = sympy.Symbol('payload_power_draw')  # W
 payload_weight_in_air = sympy.Symbol('payload_weight_in_air')  # kg
 payload_displaced_volume = sympy.Symbol('payload_displaced_volume')  # m^3
 payload_module_material_density = sympy.Symbol('payload_module_material_density')  # g/cm^3
+payload_module_material_youngs_modulus = sympy.Symbol('payload_module_material_youngs_modulus')  # Pa
+payload_module_material_yield_stress = sympy.Symbol('payload_module_material_yield_stress')  # Pa
+payload_module_material_poissons_ratio = sympy.Symbol('payload_module_material_poissons_ratio')
 payload_module_external_diameter = sympy.Symbol('payload_module_external_diameter')  # m
 payload_module_external_nose_length = sympy.Symbol('payload_module_external_nose_length')  # m
-payload_module_external_tail_length = sympy.Symbol('payload_external_tail_length')  # m
+payload_module_external_tail_length = sympy.Symbol('payload_module_external_tail_length')  # m
 payload_module_external_center_length = sympy.Symbol('payload_module_external_center_length')  # m
 hotel_power_draw = sympy.Symbol('hotel_power_draw')  # W
 coefficient_of_drag = sympy.Symbol('coefficient_of_drag')  # unitless
@@ -62,6 +69,9 @@ buoyancy_engine_motor_efficiency = sympy.Symbol('buoyancy_engine_motor_efficienc
 buoyancy_engine_fluid_displacement = sympy.Symbol('buoyancy_engine_fluid_displacement')  # mm^3/rev
 buoyancy_engine_rpm = sympy.Symbol('buoyancy_engine_rpm')  # rev/min
 buoyancy_engine_module_material_density = sympy.Symbol('buoyancy_engine_module_material_density')  # g/cm^3
+buoyancy_engine_module_material_youngs_modulus = sympy.Symbol('buoyancy_engine_module_material_youngs_modulus')  # Pa
+buoyancy_engine_module_material_yield_stress = sympy.Symbol('buoyancy_engine_module_material_yield_stress')  # Pa
+buoyancy_engine_module_material_poissons_ratio = sympy.Symbol('buoyancy_engine_module_material_poissons_ratio')
 buoyancy_engine_module_external_diameter = sympy.Symbol('buoyancy_engine_module_external_diameter')  # m
 buoyancy_engine_module_external_nose_length = sympy.Symbol('buoyancy_engine_module_external_nose_length')  # m
 buoyancy_engine_module_external_tail_length = sympy.Symbol('buoyancy_engine_module_external_tail_length')  # m
@@ -69,9 +79,15 @@ buoyancy_engine_module_external_center_length = sympy.Symbol('buoyancy_engine_mo
 battery_energy_density = sympy.Symbol('battery_energy_density')  # Wh/L
 battery_specific_energy_density = sympy.Symbol('battery_specific_energy_density')  # Wh/kg
 battery_pack_module_material_density = sympy.Symbol('battery_pack_module_material_density')  # g/cm^3
+battery_pack_module_material_youngs_modulus = sympy.Symbol('battery_pack_module_material_youngs_modulus')  # Pa
+battery_pack_module_material_yield_stress = sympy.Symbol('battery_pack_module_material_yield_stress')  # Pa
+battery_pack_module_material_poissons_ratio = sympy.Symbol('battery_pack_module_material_poissons_ratio')
 battery_pack_module_external_nose_length = sympy.Symbol('battery_pack_module_external_nose_length')  # m
 battery_pack_module_external_tail_length = sympy.Symbol('battery_pack_module_external_tail_length')  # m
 electronics_module_material_density = sympy.Symbol('electronics_module_material_density')  # g/cm^3
+electronics_module_material_youngs_modulus = sympy.Symbol('electronics_module_material_youngs_modulus')  # Pa
+electronics_module_material_yield_stress = sympy.Symbol('electronics_module_material_yield_stress')  # Pa
+electronics_module_material_poissons_ratio = sympy.Symbol('electronics_module_material_poissons_ratio')
 electronics_module_external_diameter = sympy.Symbol('electronics_module_external_diameter')  # m
 electronics_module_external_nose_length = sympy.Symbol('electronics_module_external_nose_length')  # m
 electronics_module_external_tail_length = sympy.Symbol('electronics_module_external_tail_length')  # m
@@ -84,12 +100,16 @@ wing_surface_area = sympy.Symbol('wing_surface_area')  # m^2
 wing_material_thickness = sympy.Symbol('wing_material_thickness')  # m
 wing_coefficient_of_lift = sympy.Symbol('wing_coefficient_of_lift')
 
+# TODO: DELETE THIS
+total_vehicle_length = total_vehicle_diameter * 8.0
+
 
 # OCEAN AND LOCATION-BASED EXPRESSIONS --------------------------------------------------------------------------------
 
 gravitational_acceleration = 9.780318 * (1.0 + (5.2788e-3 + 2.36e-5 * sin(mpmath.radians(mission_latitude))**2) * \
    sin(mpmath.radians(mission_latitude))**2)  # m/s^2
 pressure_at_maximum_depth = 10000 * (2.398599584e05 - sqrt(5.753279964e10 - (4.833657881e05 * vehicle_depth_rating)))
+crush_pressure_at_maximum_depth = pressure_at_maximum_depth * DEPTH_RATING_SAFETY_FACTOR
 water_density_at_maximum_depth = 1000 + ((((((((((((5.2787e-8 * mission_minimum_water_temperature) - 6.12293e-6) * \
    mission_minimum_water_temperature) + 8.50935e-5) + ((((9.1697e-10 * mission_minimum_water_temperature) + \
    2.0816e-8) * mission_minimum_water_temperature) - 9.9348e-7) * mission_water_salinity) * \
@@ -231,135 +251,198 @@ wing_tip_chord = wing_taper_ratio * wing_root_chord
 battery_pack_module_external_diameter = total_vehicle_diameter * INTERNAL_MODULE_PACKING_FACTOR
 battery_pack_module_external_center_length = cylindrical_battery_pack_required_length
 battery_pack_module_external_length = battery_pack_module_external_center_length + battery_pack_module_external_nose_length + battery_pack_module_external_tail_length
+battery_pack_module_material_thickness_cylinder = sympy.Max(pow((0.5 * crush_pressure_at_maximum_depth / battery_pack_module_material_youngs_modulus) * \
+   (1.0 - battery_pack_module_material_poissons_ratio**2), 1.0 / 3.0) * battery_pack_module_external_diameter,
+   (0.5 * (1.0 - sqrt(1.0 - (2.0 * crush_pressure_at_maximum_depth / battery_pack_module_material_yield_stress))) * battery_pack_module_external_diameter))
+battery_pack_module_material_thickness_sphere = sympy.Max(sqrt(crush_pressure_at_maximum_depth * (0.5 * battery_pack_module_external_diameter)**2 / \
+   (0.365 * battery_pack_module_material_youngs_modulus)), (crush_pressure_at_maximum_depth * 0.5 * battery_pack_module_external_diameter) / \
+   (2.0 * battery_pack_module_material_yield_stress))
+battery_pack_module_material_thickness = sympy.Piecewise((battery_pack_module_material_thickness_sphere, battery_pack_module_external_center_length <= 0.0001),
+   (sympy.Max(battery_pack_module_material_thickness_cylinder, battery_pack_module_material_thickness_sphere), True))
+battery_pack_module_internal_diameter = battery_pack_module_external_diameter - (2.0 * battery_pack_module_material_thickness)
 buoyancy_engine_module_external_length = buoyancy_engine_module_external_center_length + buoyancy_engine_module_external_nose_length + buoyancy_engine_module_external_tail_length
+buoyancy_engine_module_material_thickness_cylinder = sympy.Max(pow((0.5 * crush_pressure_at_maximum_depth / buoyancy_engine_module_material_youngs_modulus) * \
+   (1.0 - buoyancy_engine_module_material_poissons_ratio**2), 1.0 / 3.0) * buoyancy_engine_module_external_diameter,
+   (0.5 * (1.0 - sqrt(1.0 - (2.0 * crush_pressure_at_maximum_depth / buoyancy_engine_module_material_yield_stress))) * buoyancy_engine_module_external_diameter))
+buoyancy_engine_module_material_thickness_sphere = sympy.Max(sqrt(crush_pressure_at_maximum_depth * (0.5 * buoyancy_engine_module_external_diameter)**2 / \
+   (0.365 * buoyancy_engine_module_material_youngs_modulus)), (crush_pressure_at_maximum_depth * 0.5 * buoyancy_engine_module_external_diameter) / \
+   (2.0 * buoyancy_engine_module_material_yield_stress))
+buoyancy_engine_module_material_thickness = sympy.Piecewise((buoyancy_engine_module_material_thickness_sphere, buoyancy_engine_module_external_center_length <= 0.0001),
+   (sympy.Max(buoyancy_engine_module_material_thickness_cylinder, buoyancy_engine_module_material_thickness_sphere), True))
+buoyancy_engine_module_internal_diameter = buoyancy_engine_module_external_diameter - (2.0 * buoyancy_engine_module_material_thickness)
 electronics_module_external_length = electronics_module_external_center_length + electronics_module_external_nose_length + electronics_module_external_tail_length
+electronics_module_material_thickness_cylinder = sympy.Max(pow((0.5 * crush_pressure_at_maximum_depth / electronics_module_material_youngs_modulus) * \
+   (1.0 - electronics_module_material_poissons_ratio**2), 1.0 / 3.0) * electronics_module_external_diameter,
+   (0.5 * (1.0 - sqrt(1.0 - (2.0 * crush_pressure_at_maximum_depth / electronics_module_material_yield_stress))) * electronics_module_external_diameter))
+electronics_module_material_thickness_sphere = sympy.Max(sqrt(crush_pressure_at_maximum_depth * (0.5 * electronics_module_external_diameter)**2 / \
+   (0.365 * electronics_module_material_youngs_modulus)), (crush_pressure_at_maximum_depth * 0.5 * electronics_module_external_diameter) / \
+   (2.0 * electronics_module_material_yield_stress))
+electronics_module_material_thickness = sympy.Piecewise((electronics_module_material_thickness_sphere, electronics_module_external_center_length <= 0.0001),
+   (sympy.Max(electronics_module_material_thickness_cylinder, electronics_module_material_thickness_sphere), True))
+electronics_module_internal_diameter = electronics_module_external_diameter - (2.0 * electronics_module_material_thickness)
 payload_module_external_length = payload_module_external_center_length + payload_module_external_nose_length + payload_module_external_tail_length
+payload_module_material_thickness_cylinder = sympy.Max(pow((0.5 * crush_pressure_at_maximum_depth / payload_module_material_youngs_modulus) * \
+   (1.0 - payload_module_material_poissons_ratio**2), 1.0 / 3.0) * payload_module_external_diameter,
+   (0.5 * (1.0 - sqrt(1.0 - (2.0 * crush_pressure_at_maximum_depth / payload_module_material_yield_stress))) * payload_module_external_diameter))
+payload_module_material_thickness_sphere = sympy.Max(sqrt(crush_pressure_at_maximum_depth * (0.5 * payload_module_external_diameter)**2 / \
+   (0.365 * payload_module_material_youngs_modulus)), (crush_pressure_at_maximum_depth * 0.5 * payload_module_external_diameter) / \
+   (2.0 * payload_module_material_yield_stress))
+payload_module_material_thickness = sympy.Piecewise((payload_module_material_thickness_sphere, payload_module_external_center_length <= 0.0001),
+   (sympy.Max(payload_module_material_thickness_cylinder, payload_module_material_thickness_sphere), True))
+payload_module_internal_diameter = payload_module_external_diameter - (2.0 * payload_module_material_thickness)
 
 
 # TEST APPLICATION ----------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
 
-   # Fill in test parameter values
-   test_parameter_values = [
-      (mission_latitude, 45.0),
-      (mission_maximum_depth, 3000.0),
-      (mission_transit_distance, 2000.0),
-      (mission_water_salinity, 34),
-      (mission_minimum_water_temperature, 2.0),
-      (total_vehicle_diameter, 0.3556),
-      (total_vehicle_length, 2.4892),
-      (vehicle_nose_length, 0.3556),
-      (vehicle_tail_length, 0.5110),
-      (vehicle_depth_rating, 3000.0),
-      (vehicle_material_density, 4.429),
-      (payload_power_draw, 0.5),
-      (payload_weight_in_air, 1.0),
-      (payload_displaced_volume, 0.18),
-      (payload_module_material_density, 2.7),
-      (payload_module_external_diameter, 0.9 * 0.3556),
-      (payload_module_external_center_length, 1.0),
-      (payload_module_external_nose_length, 0.02),
-      (payload_module_external_tail_length, 0.02),
-      (hotel_power_draw, 2.0),
-      (coefficient_of_drag, 0.23),
-      (minimum_glide_slope, 15.0),
-      (nominal_glide_slope, 35.0),
-      (nominal_horizontal_speed, 0.5),
-      (peak_horizontal_speed, 1.0),
-      (buoyancy_engine_pump_efficiency, 0.85),
-      (buoyancy_engine_motor_efficiency, 0.7),
-      (buoyancy_engine_fluid_displacement, 300),
-      (buoyancy_engine_rpm, 1500.0),
-      (buoyancy_engine_module_material_density, 2.7),
-      (buoyancy_engine_module_external_diameter, 0.338),
-      (buoyancy_engine_module_external_center_length, 0.0),
-      (buoyancy_engine_module_external_nose_length, 0.0),
-      (buoyancy_engine_module_external_tail_length, 0.338 / 2.0),
-      (battery_energy_density, 1211.0),
-      (battery_specific_energy_density, 621.0),
-      (battery_pack_module_material_density, 2.7),
-      (battery_pack_module_external_nose_length, 0.0),
-      (battery_pack_module_external_tail_length, 0.0),
-      (electronics_module_material_density, 2.7),
-      (electronics_module_external_diameter, 0.338),
-      (electronics_module_external_center_length, 0.0),
-      (electronics_module_external_nose_length, 0.338 / 2.0),
-      (electronics_module_external_tail_length, 0.0),
-      (wing_span, 1.5178),
-      (wing_taper_ratio, 0.3),
-      (wing_volume, 0.002454),
-      (wing_surface_area, 0.28096),
-      (wing_material_thickness, 0.001524),
-      (wing_coefficient_of_lift, 0.4545)]
-   
-   # Print out design parameter values
-   print('\nDesign Parameter Values:\n')
-   for val in test_parameter_values:
-      print('   {}: {}'.format(val[0], val[1]))
-   
-   # Print out derived parameter values
-   print('\nDerived Parameter Values:\n')
-   print('   Gravitational Acceleration: {} m/s^2'.format(gravitational_acceleration.subs(test_parameter_values).evalf()))
-   print('   Pressure at Rated Dive Depth: {} Pa'.format(pressure_at_maximum_depth.subs(test_parameter_values).evalf()))
-   print('   Water Density at Rated Dive Depth: {} kg/m^3'.format(water_density_at_maximum_depth.subs(test_parameter_values).evalf()))
-   print('   Water Absolute Viscosity at Rated Dive Depth: {} Pa*s'.format(seawater_absolute_viscosity.subs(test_parameter_values).evalf()))
-   print('   Water Kinematic Viscosity at Rated Dive Depth: {} m^2/s'.format(seawater_kinematic_viscosity.subs(test_parameter_values).evalf()))
-   print('   Vehicle Uniform Center Length: {} m'.format(vehicle_uniform_center_length.subs(test_parameter_values).evalf()))
-   print('   Vehicle Frontal Area: {} m^2'.format(total_vehicle_frontal_area.subs(test_parameter_values).evalf()))
-   print('   Vehicle Nose Wetted Area: {} m^2'.format(vehicle_nose_wetted_area.subs(test_parameter_values).evalf()))
-   print('   Vehicle Tail Wetted Area: {} m^2'.format(vehicle_tail_wetted_area.subs(test_parameter_values).evalf()))
-   print('   Vehicle Center Wetted Area: {} m^2'.format(vehicle_center_wetted_area.subs(test_parameter_values).evalf()))
-   print('   Vehicle Total Wetted Area: {} m^2'.format(total_vehicle_wetted_area.subs(test_parameter_values).evalf()))
-   print('   Reynolds Number at Nominal Speed: {}'.format(reynolds_number_nominal_speed.subs(test_parameter_values).evalf()))
-   print('   Reynolds Number at Maximum Speed: {}'.format(reynolds_number_maximum_speed.subs(test_parameter_values).evalf()))
-   print('   Coefficient of Skin Friction: {}'.format(coefficient_of_skin_friction.subs(test_parameter_values).evalf()))
-   print('   Nominal Form Drag Force: {} N'.format(nominal_form_drag_force.subs(test_parameter_values).evalf()))
-   print('   Nominal Friction Drag Force: {} N'.format(nominal_friction_drag_force.subs(test_parameter_values).evalf()))
-   print('   Maximum Form Drag Force: {} N'.format(maximum_form_drag_force.subs(test_parameter_values).evalf()))
-   print('   Maximum Friction Drag Force: {} N'.format(maximum_friction_drag_force.subs(test_parameter_values).evalf()))
-   print('   Nominal Buoyancy Force Required: {} N'.format(nominal_buoyancy_required.subs(test_parameter_values).evalf()))
-   print('   Maximum Buoyancy Force Required: {} N'.format(maximum_buoyancy_required.subs(test_parameter_values).evalf()))
-   print('   Buoyancy Engine Fluid Mass: {} kg'.format(buoyancy_engine_fluid_mass.subs(test_parameter_values).evalf()))
-   print('   Buoyancy Engine Fluid Volume: {} m^3'.format(buoyancy_engine_fluid_volume.subs(test_parameter_values).evalf()))
-   print('   Buoyancy Engine Reservoir Volume: {} cc'.format(buoyancy_engine_reservoir_volume.subs(test_parameter_values).evalf()))
-   print('   Buoyancy Engine Flow Rate: {} m^3/s'.format(buoyancy_engine_flow_rate.subs(test_parameter_values).evalf()))
-   print('   Buoyancy Engine Per-Dive Pump Time: {} s'.format(buoyancy_engine_per_dive_pump_time.subs(test_parameter_values).evalf()))
-   print('   Buoyancy Engine Per-Dive Energy: {} J'.format(buoyancy_engine_per_dive_energy.subs(test_parameter_values).evalf()))
-   print('   Buoyancy Engine Module External Length: {} m'.format(buoyancy_engine_module_external_length.subs(test_parameter_values).evalf()))
-   print('   Nominal Glide Speed: {} m/s'.format(nominal_glide_speed.subs(test_parameter_values).evalf()))
-   print('   Nominal Vertical Speed: {} m/s'.format(nominal_vertical_speed.subs(test_parameter_values).evalf()))
-   print('   Peak Glide Speed: {} m/s'.format(peak_glide_speed.subs(test_parameter_values).evalf()))
-   print('   Peak Vertical Speed: {} m/s'.format(peak_vertical_speed.subs(test_parameter_values).evalf()))
-   print('   Mission Per-Dive Duration: {} s'.format(dive_duration.subs(test_parameter_values).evalf()))
-   print('   Horizontal Distance Per Dive: {} m'.format(dive_horizontal_distance.subs(test_parameter_values).evalf()))
-   print('   Required Total Number of Mission Dives: {}'.format(dives_per_mission.subs(test_parameter_values).evalf()))
-   print('   Total Mission Duration: {} s'.format(mission_duration.subs(test_parameter_values).evalf()))
-   print('   Total Hotel Energy Required: {} J'.format(total_hotel_energy_required.subs(test_parameter_values).evalf()))
-   print('   Total Payload Energy Required: {} J'.format(total_payload_energy_required.subs(test_parameter_values).evalf()))
-   print('   Total Propulsion Energy Required: {} J'.format(total_propulsion_energy_required.subs(test_parameter_values).evalf()))
-   print('   Total Mission Energy Required: {} J'.format(total_mission_energy_required.subs(test_parameter_values).evalf()))
-   print('   Required Battery Capacity: {} Wh'.format(battery_capacity_required.subs(test_parameter_values).evalf()))
-   print('   Battery Pack Weight: {} kg'.format(battery_pack_weight.subs(test_parameter_values).evalf()))
-   print('   Unpacked Battery Pack Volume: {} m^3'.format(unpacked_battery_pack_volume.subs(test_parameter_values).evalf()))
-   print('   Packed Battery Pack Volume: {} m^3'.format(packed_battery_pack_volume.subs(test_parameter_values).evalf()))
-   print('   Num Required Spherical Battery Packs: {}'.format(num_spherical_battery_packs_required.subs(test_parameter_values).evalf()))
-   print('   Spherical Battery Pack Diameter Required: {} m'.format(spherical_battery_pack_required_diameter.subs(test_parameter_values).evalf()))
-   print('   Spherical Battery Pack Unit Weight: {} kg'.format(spherical_battery_pack_unit_weight.subs(test_parameter_values).evalf()))
-   print('   Cylindrical Battery Pack Diameter Required: {} m'.format(cylindrical_battery_pack_required_diameter.subs(test_parameter_values).evalf()))
-   print('   Cylindrical Battery Pack Length Required: {} m'.format(cylindrical_battery_pack_required_length.subs(test_parameter_values).evalf()))
-   print('   Battery Pack Module External Diameter: {} m'.format(battery_pack_module_external_diameter.subs(test_parameter_values).evalf()))
-   print('   Battery Pack Module External Center Length: {} m'.format(battery_pack_module_external_center_length.subs(test_parameter_values).evalf()))
-   print('   Battery Pack Module External Total Length: {} m'.format(battery_pack_module_external_length.subs(test_parameter_values).evalf()))
-   print('   Electronics Module External Length: {} m'.format(electronics_module_external_length.subs(test_parameter_values).evalf()))
-   print('   Payload Module External Length: {} m'.format(payload_module_external_length.subs(test_parameter_values).evalf()))
-   print('   Syntactic Foam Density: {} kg/m^3'.format(syntactic_foam_density.subs(test_parameter_values).evalf()))
-   print('   Single Wing Length: {} m'.format(single_wing_length.subs(test_parameter_values).evalf()))
-   print('   Maximum L/D Ratio: {}'.format(maximum_lift_drag_ratio.subs(test_parameter_values).evalf()))
-   print('   Minimum Wing Lift: {} N'.format(minimum_wing_lift.subs(test_parameter_values).evalf()))
-   print('   Wing Surface Area: {} m^2'.format(wing_surface_area.subs(test_parameter_values).evalf()))
-   print('   Wing Aspect Ratio: {}'.format(wing_aspect_ratio.subs(test_parameter_values).evalf()))
-   print('   Wing Mean Chord: {} m'.format(wing_mean_chord.subs(test_parameter_values).evalf()))
-   print('   Wing Root Chord: {} m'.format(wing_root_chord.subs(test_parameter_values).evalf()))
-   print('   Wing Tip Chord: {} m'.format(wing_tip_chord.subs(test_parameter_values).evalf()))
-   print()
+   # Specify all derived values to track
+   derived_values = PointFunc({
+      'gravitational_acceleration': gravitational_acceleration,
+      'pressure_at_maximum_depth': pressure_at_maximum_depth,
+      'rated_crush_pressure': crush_pressure_at_maximum_depth,
+      'water_density_at_rated_dive_depth': water_density_at_maximum_depth,
+      'water_absolute_viscosity_at_rated_dive_depth': seawater_absolute_viscosity,
+      'water_kinematic_viscosity_at_rated_dive_depth': seawater_kinematic_viscosity,
+      'vehicle_uniform_center_length': vehicle_uniform_center_length,
+      'vehicle_frontal_area': total_vehicle_frontal_area,
+      'vehicle_nose_wetted_area': vehicle_nose_wetted_area,
+      'vehicle_tail_wetted_area': vehicle_tail_wetted_area,
+      'vehicle_center_wetted_area': vehicle_center_wetted_area,
+      'vehicle_total_wetted_area': total_vehicle_wetted_area,
+      'reynolds_number_at_nominal_speed': reynolds_number_nominal_speed,
+      'reynolds_number_at_maximum_speed': reynolds_number_maximum_speed,
+      'coefficient_of_skin_friction': coefficient_of_skin_friction,
+      'nominal_form_drag_force': nominal_form_drag_force,
+      'nominal_friction_drag_force': nominal_friction_drag_force,
+      'maximum_form_drag_force': maximum_form_drag_force,
+      'maximum_friction_drag_force': maximum_friction_drag_force,
+      'nominal_buoyancy_force_required': nominal_buoyancy_required,
+      'maximum_buoyancy_force_required': maximum_buoyancy_required,
+      'buoyancy_engine_fluid_mass': buoyancy_engine_fluid_mass,
+      'buoyancy_engine_fluid_volume': buoyancy_engine_fluid_volume,
+      'buoyancy_engine_reservoir_volume': buoyancy_engine_reservoir_volume,
+      'buoyancy_engine_flow_rate': buoyancy_engine_flow_rate,
+      'buoyancy_engine_per_dive_pump_time': buoyancy_engine_per_dive_pump_time,
+      'buoyancy_engine_per_dive_energy': buoyancy_engine_per_dive_energy,
+      'buoyancy_engine_module_external_length': buoyancy_engine_module_external_length,
+      'buoyancy_engine_module_material_thickness': buoyancy_engine_module_material_thickness,
+      'buoyancy_engine_module_internal_diameter': buoyancy_engine_module_internal_diameter,
+      'nominal_glide_speed': nominal_glide_speed,
+      'nominal_vertical_speed': nominal_vertical_speed,
+      'peak_glide_speed': peak_glide_speed,
+      'peak_vertical_speed': peak_vertical_speed,
+      'mission_per_dive_duration': dive_duration,
+      'horizontal_distance_per_dive': dive_horizontal_distance,
+      'required_total_number_of_mission_dives': dives_per_mission,
+      'total_mission_duration': mission_duration,
+      'total_hotel_energy_required': total_hotel_energy_required,
+      'total_payload_energy_required': total_payload_energy_required,
+      'total_propulsion_energy_required': total_propulsion_energy_required,
+      'total_mission_energy_required': total_mission_energy_required,
+      'required_battery_capacity': battery_capacity_required,
+      'battery_pack_weight': battery_pack_weight,
+      'unpacked_battery_pack_volume': unpacked_battery_pack_volume,
+      'packed_battery_pack_volume': packed_battery_pack_volume,
+      'num_required_spherical_battery_packs': num_spherical_battery_packs_required,
+      'spherical_battery_pack_diameter_required': spherical_battery_pack_required_diameter,
+      'spherical_battery_pack_unit_weight': spherical_battery_pack_unit_weight,
+      'cylindrical_battery_pack_diameter_required': cylindrical_battery_pack_required_diameter,
+      'cylindrical_battery_pack_length_required': cylindrical_battery_pack_required_length,
+      'battery_pack_module_external_diameter': battery_pack_module_external_diameter,
+      'battery_pack_module_external_center_length': battery_pack_module_external_center_length,
+      'battery_pack_module_external_total_length': battery_pack_module_external_length,
+      'battery_pack_module_material_thickness': battery_pack_module_material_thickness,
+      'battery_pack_module_internal_diameter': battery_pack_module_internal_diameter,
+      'electronics_module_external_length': electronics_module_external_length,
+      'electronics_module_material_thickness': electronics_module_material_thickness,
+      'electronics_module_internal_diameter': electronics_module_internal_diameter,
+      'payload_module_external_length': payload_module_external_length,
+      'payload_module_material_thickness': payload_module_material_thickness,
+      'payload_module_internal_diameter': payload_module_internal_diameter,
+      'syntactic_foam_density': syntactic_foam_density,
+      'single_wing_length': single_wing_length,
+      'maximum_ld_ratio': maximum_lift_drag_ratio,
+      'minimum_wing_lift': minimum_wing_lift,
+      'wing_surface_area': wing_surface_area,
+      'wing_aspect_ratio': wing_aspect_ratio,
+      'wing_mean_chord': wing_mean_chord,
+      'wing_root_chord': wing_root_chord,
+      'wing_tip_chord': wing_tip_chord
+   })
+
+   # Concretely specify parameters from the STR spreadsheet
+   spreadsheet = {
+      'mission_latitude': 45.0,
+      'mission_maximum_depth': 3000.0,
+      'mission_transit_distance': 2000.0,
+      'mission_water_salinity': 34,
+      'mission_minimum_water_temperature': 2.0,
+      'total_vehicle_diameter': 0.3556,
+      #'total_vehicle_length': 2.4892,
+      'vehicle_nose_length': 0.3556,
+      'vehicle_tail_length': 0.5110,
+      'vehicle_depth_rating': 3000.0,
+      'vehicle_material_density': 4.429,
+      'vehicle_material_youngs_modulus': 6.89e10,
+      'vehicle_material_yield_stress': 2.76e8,
+      'vehicle_material_poissons_ratio': 0.33,
+      'payload_power_draw': 0.5,
+      'payload_weight_in_air': 1.0,
+      'payload_displaced_volume': 0.18,
+      'payload_module_material_density': 2.7,
+      'payload_module_material_youngs_modulus': 6.89e10,
+      'payload_module_material_yield_stress': 2.76e8,
+      'payload_module_material_poissons_ratio': 0.33,
+      'payload_module_external_diameter': 0.9 * 0.3556,
+      'payload_module_external_center_length': 1.0,
+      'payload_module_external_nose_length': 0.02,
+      'payload_module_external_tail_length': 0.02,
+      'hotel_power_draw': 2.0,
+      'coefficient_of_drag': 0.23,
+      'minimum_glide_slope': 15.0,
+      'nominal_glide_slope': 35.0,
+      'nominal_horizontal_speed': 0.5,
+      'peak_horizontal_speed': 1.0,
+      'buoyancy_engine_pump_efficiency': 0.85,
+      'buoyancy_engine_motor_efficiency': 0.7,
+      'buoyancy_engine_fluid_displacement': 300,
+      'buoyancy_engine_rpm': 1500.0,
+      'buoyancy_engine_module_material_density': 2.7,
+      'buoyancy_engine_module_material_youngs_modulus': 6.89e10,
+      'buoyancy_engine_module_material_yield_stress': 2.76e8,
+      'buoyancy_engine_module_material_poissons_ratio': 0.33,
+      'buoyancy_engine_module_external_diameter': 0.338,
+      'buoyancy_engine_module_external_center_length': 0.0,
+      'buoyancy_engine_module_external_nose_length': 0.0,
+      'buoyancy_engine_module_external_tail_length': 0.338 / 2.0,
+      'battery_energy_density': 1211.0,
+      'battery_specific_energy_density': 621.0,
+      'battery_pack_module_material_density': 2.7,
+      'battery_pack_module_material_youngs_modulus': 6.89e10,
+      'battery_pack_module_material_yield_stress': 2.76e8,
+      'battery_pack_module_material_poissons_ratio': 0.33,
+      'battery_pack_module_external_nose_length': 0.0,
+      'battery_pack_module_external_tail_length': 0.0,
+      'electronics_module_material_density': 2.7,
+      'electronics_module_material_youngs_modulus': 6.89e10,
+      'electronics_module_material_yield_stress': 2.76e8,
+      'electronics_module_material_poissons_ratio': 0.33,
+      'electronics_module_external_diameter': 0.338,
+      'electronics_module_external_center_length': 0.0,
+      'electronics_module_external_nose_length': 0.338 / 2.0,
+      'electronics_module_external_tail_length': 0.0,
+      'wing_span': 1.5178,
+      'wing_taper_ratio': 0.3,
+      'wing_volume': 0.002454,
+      'wing_surface_area': 0.28096,
+      'wing_material_thickness': 0.001524,
+      'wing_coefficient_of_lift': 0.4545
+   }
+
+   # Output the derived parameter values
+   solutions = derived_values(PointCloud(list(spreadsheet.keys()),
+      torch.Tensor(list(spreadsheet.values())).view(1, -1)))
+   for sol in range(solutions.num_points):
+      for idx, var in enumerate(solutions.float_vars):
+         print(var + ":", solutions.float_data[sol, idx].item())
