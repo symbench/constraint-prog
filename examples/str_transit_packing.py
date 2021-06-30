@@ -101,12 +101,13 @@ allowable_roll_error_at_neutral = 0.5  # degrees
 
 foam1_length = sympy.Symbol("foam1_length")
 foam1_volume = foam1_length * pi / 4 * \
-    (pressure_vessel_outer_diameter ** 2)  # m^3
+    (vehicle_inner_diameter ** 2 - movable_pitch_diameter ** 2)  # m^3
 foam1_dry_mass = foam1_volume * FOAM_DENSITY  # kg
 foam1_displacement = foam1_volume * WATER_DENSITY_AT_SEA_LEVEL  # kg
 foam1_x_left = 0  # m
 foam1_x_right = foam1_x_left + foam1_length  # m
 foam1_x_center = (foam1_x_left + foam1_x_right) / 2  # m
+foam1_z_center = -movable_pitch_diameter / 2
 
 vessel1_dry_mass = pressure_vessel_dry_mass
 vessel1_displacement = pressure_vessel_displacement
@@ -145,12 +146,13 @@ bladder1_x_center = (bladder1_x_left + bladder1_x_right) / 2
 
 foam2_length = sympy.Symbol("foam2_length")
 foam2_volume = foam2_length * pi / 4 * \
-    (pressure_vessel_outer_diameter ** 2)  # m^3
+    (vehicle_inner_diameter ** 2 - movable_pitch_diameter ** 2)  # m^3
 foam2_dry_mass = foam2_volume * FOAM_DENSITY  # kg
 foam2_displacement = foam2_volume * WATER_DENSITY_AT_SEA_LEVEL  # kg
 foam2_x_left = bladder1_x_right  # m
 foam2_x_right = foam2_x_left + foam2_length  # m
 foam2_x_center = (foam2_x_left + foam2_x_right) / 2  # m
+foam2_z_center = -movable_pitch_diameter / 2
 
 wing_x_left = foam2_x_right
 wing_x_right = wing_x_left + wing_length
@@ -180,12 +182,13 @@ electronics_x_center = vessel3_x_center
 
 foam3_length = sympy.Symbol("foam3_length")
 foam3_volume = foam3_length * pi / 4 * \
-    (pressure_vessel_outer_diameter ** 2)  # m^3
+    (vehicle_inner_diameter ** 2 - movable_pitch_diameter ** 2)  # m^3
 foam3_dry_mass = foam3_volume * FOAM_DENSITY  # kg
 foam3_displacement = foam3_volume * WATER_DENSITY_AT_SEA_LEVEL  # kg
 foam3_x_left = vessel3_x_right  # m
 foam3_x_right = foam3_x_left + foam3_length  # m
 foam3_x_center = (foam3_x_left + foam3_x_right) / 2  # m
+foam3_z_center = -movable_pitch_diameter / 2
 
 vessel4_dry_mass = pressure_vessel_dry_mass
 vessel4_displacement = pressure_vessel_displacement
@@ -200,7 +203,7 @@ battery2_packing_volume = battery2_capacity / BATTERY_CAPACITY_PER_VOLUME / BATT
 
 vehicle_inner_length = vessel4_x_right
 vehicle_fairing_x_center = vehicle_inner_length / 2
-vehicle_fairing_z_center = (pressure_vessel_outer_diameter - vehicle_inner_diameter) / 2
+vehicle_fairing_z_center = -movable_pitch_diameter / 2
 
 # movable pitch is completeley below the other modules
 movable_pitch_length = sympy.Symbol("movable_pitch_length")
@@ -442,6 +445,8 @@ derived_values = PointFunc({
     "roll_minimum_mass": roll_minimum_cbmg_buoyancy,
     "roll_minimum_angle": atan(-roll_minimum_cbmg_y / roll_minimum_cbmg_z) * 180 / pi,
     "foam1_x_center": foam1_x_center,
+    "foam1_z_center": foam1_z_center,
+    "foam1_volume": foam1_volume,
     "foam1_dry_mass": foam1_dry_mass,
     "vessel1_x_center": vessel1_x_center,
     "battery1_x_center": battery1_x_center,
@@ -462,6 +467,8 @@ derived_values = PointFunc({
     "movable_roll_z_center": movable_roll_z_center,
     "movable_roll_dry_mass": movable_roll_dry_mass,
     "foam2_x_center": foam2_x_center,
+    "foam2_z_center": foam2_z_center,
+    "foam2_volume": foam2_volume,
     "foam2_dry_mass": foam2_dry_mass,
     "vessel3_x_center": vessel3_x_center,
     "electronics_x_center": electronics_x_center,
@@ -471,6 +478,8 @@ derived_values = PointFunc({
     "battery2_packing_volume": battery2_packing_volume,
     "battery2_dry_mass": battery2_dry_mass,
     "foam3_x_center": foam3_x_center,
+    "foam3_z_center": foam3_z_center,
+    "foam3_volume": foam3_volume,
     "foam3_dry_mass": foam3_dry_mass,
     "movable_pitch_x_center_fwd": movable_pitch_x_center_fwd,
     "movable_pitch_x_center_mid": movable_pitch_x_center_mid,
