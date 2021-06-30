@@ -38,6 +38,8 @@ BATTERY_CAPACITY_PER_MASS = 621  # Wh / kg
 BATTERY_CAPACITY_PER_VOLUME = 1211e3  # Wh / m^3
 BATTERY_PACKING_FACTOR = 0.85
 
+DEPTH_RATING_SAFETY_FACTOR = 1.25
+
 GRAVITATIONAL_CONSTANT = 9.806  # m/s^2
 
 # design constants
@@ -50,11 +52,11 @@ wing_wet_mass = 1.698  # kg
 wing_length = 0.248  # m
 wing_z_offset = 0.1  # m
 required_battery_capacity = 28000  # Wh
-glider_depth_rating = 3000 * 1.25  # m
+glider_depth_rating = 3000  # m
 
 # calculated automatically
 pressure_vessel_outer_diameter = vehicle_inner_diameter - movable_pitch_diameter  # m
-glider_crush_pressure = WATER_DENSITY_AT_DIVE_DEPTH * glider_depth_rating * GRAVITATIONAL_CONSTANT
+glider_crush_pressure = WATER_DENSITY_AT_DIVE_DEPTH * glider_depth_rating * DEPTH_RATING_SAFETY_FACTOR * GRAVITATIONAL_CONSTANT
 # aluminum_buckling_failure_cylinder = ((glider_crush_pressure * 0.5 / ALUMINIUM_YOUNG_MODULUS) *
 #                                        (1.0 - ALUMINIUM_POISSON_RATIO ** 2)) ** (1.0/3.0) * \
 #                                       pressure_vessel_outer_diameter
