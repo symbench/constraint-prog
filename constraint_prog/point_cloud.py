@@ -480,7 +480,7 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data)
 
-    def extend(self, other: 'PointCould') -> 'PointCloud':
+    def extend(self, other: 'PointCloud') -> 'PointCloud':
         """
         Extends this point cloud with new columns from the other.
         The number of points in the two cloud must match.
