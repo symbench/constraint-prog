@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2021, Zsolt Vizi
+# Copyright (C) 2021, Zsolt Vizi, Miklos Maroti
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,34 +23,25 @@ from constraint_prog.point_cloud import PointCloud
 
 
 class PointCloud2:
-    def __init__(self, data_dict: Dict[str, Union[torch.Tensor, np.ndarray]],
-                 float_vars: List[str] = None
-                 ) -> None:
-        self.data_dict = data_dict
+    def __init__(self, data: Dict[str, Union[torch.Tensor, np.ndarray]]) -> None:
+        self.data = data
+        assert self.data  # not empty
 
-        if float_vars is not None:
-            for var in float_vars:
-                assert var in self.data_dict.keys()
-            self.float_vars = float_vars
-            self.string_vars = list(set(self.data_dict.keys()) - set(self.float_vars))
-        else:
-            self.float_vars = None
-            self.string_vars = None
-
-    @property
-    def num_points(self) -> int:
-        num_points = self.data_dict[list(self.data_dict.keys())[0]].shape[0]
-        for key in self.data_dict.keys():
-            assert num_points == self.data_dict[key].shape[0]
-        return num_points
+        self.num_points = None
+        for val in data.values():
+            assert isinstance(data, torch.Tensor) or type(data).__module__ == np.__name__
+            num = data.shape[0]
+            if self.num_points is None:
+                self.num_points = num
+            else:
+                assert self.num_points == num
 
     @property
     def num_vars(self) -> int:
-        return len(list(self.data_dict.keys()))
+        return len(self.data)
 
     def __getitem__(self, var: str) -> Union[torch.Tensor, np.ndarray]:
-        assert var in self.data_dict.keys()
-        return self.data_dict[var]
+        return self.data[var]
 
     @staticmethod
     def convert(points: PointCloud) -> 'PointCloud2':
