@@ -439,8 +439,9 @@ constraints = PointFunc({
     # "vehicle_dry_mass_equation": vehicle_dry_mass <= 190,
 })
 
-print(constraints.input_names)
-print(constraints.output_names)
+print("constraint variables:", constraints.input_names)
+print("constraint equations:", list(constraints.output_names))
+print("constraint dictionary:", constraints.exprs)
 
 derived_values = PointFunc({
     "pitch_minimum_buoyancy": pitch_minimum_cbmg_buoyancy,
@@ -523,6 +524,8 @@ bounds = {
     "movable_pitch_length": (0.10, 1.0),
     "movable_roll_width": (0.05, 0.5),
 }
+
+print("bounds dictionary", bounds)
 
 assert list(bounds.keys()) == list(constraints.input_names)
 
