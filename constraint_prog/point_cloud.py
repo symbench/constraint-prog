@@ -274,27 +274,34 @@ class PointCloud:
 
         return PointCloud(func.input_names, input_data)
 
-    def add_mutations(self, stddev: List[float], num_points: int):
+    def add_mutations(self, stddevs: Union[Dict[str, float], float],
+                      num_points: int, multiplier: float = 1.0):
         """
         Take random elements from the point cloud and add random mutations
         to the given coordinates so that the total number of points is
-        num_points.
+        num_points. If a coordinate is not listed in the dictionary, then
+        that value will not change.
         """
-        assert len(stddev) == self.num_float_vars
         count = num_points - self.num_points
         if count <= 0 or self.num_points <= 0:
             return
 
+        if isinstance(stddevs, float):
+            stddevs = torch.full((self.num_float_vars, ), stddevs * multiplier,
+                                 dtype=torch.float32, device=self.device)
+        else:
+            assert stddevs.keys() <= set(self.float_vars)
+            stddevs = torch.tensor(
+                [stddevs.get(var, 0.0) * multiplier for var in self.float_vars],
+                dtype=torch.float32, device=self.device)
+
         indices = torch.randint(0, self.num_points, (count, ), device=self.device)
         mutation = torch.randn((count, self.num_float_vars),
                                dtype=torch.float32, device=self.device)
-        mutation = mutation * torch.tensor([stddev],
-                                           dtype=torch.float32, device=self.device)
-        new_data = self.float_data[indices] + mutation
+        new_data = self.float_data[indices] + mutation * stddevs
         self.float_data = torch.cat((self.float_data, new_data), dim=0)
 
-        indices = indices.numpy()
-        new_data = self.string_data[indices]
+        new_data = self.string_data[indices.numpy()]
         self.string_data = numpy.concatenate((self.string_data, new_data), axis=0)
 
     def to_device(self, device="cpu"):

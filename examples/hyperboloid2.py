@@ -47,7 +47,7 @@ def main_pareto():
     # repeatedly mutate designs to get closer to pareto front
     for _ in range(10):
         # mutate the existing points
-        points.add_mutations([0.1] * dim, num)
+        points.add_mutations(0.1, num)
         # points.plot2d(0, 1)
 
         # solve the constraints and update points
