@@ -30,7 +30,7 @@ import os
 import sys
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn import linear_model
-
+from sympy import *
 from constraint_prog.point_cloud import PointCloud
 
 
@@ -101,7 +101,32 @@ if __name__ == '__main__':
     Y = np.reshape(Y, (-1, 1))
 
     # fit a higher order multivariate polynomial
-    p, poly_features = fit_poly(X, Y, 11)
+    p, poly_features = fit_poly(X, Y, 5)
+
+    # produce sympy expression from the fitted poly
+    feature_names = poly_features.get_feature_names()
+    coefficients = p.coef_.tolist()
+    sympy_expr = ""
+    for c,f in zip(feature_names, coefficients[0]):
+        if(f < 0):
+            sympy_expr += str(f)+"*"+c
+            #print(str(f)+"*"+c, end='')
+        else:
+            sympy_expr += "+"+str(f) + "*" + c
+            #print("+"+str(f) + "*" + c, end='')
+    #print()
+    sympy_expr = sympy_expr.replace("^", "**")
+    sympy_expr = sympy_expr.replace(" ", "*")
+    expr = sympify(sympy_expr)
+    x0, x1, x2 = symbols("x0 x1 x2")
+    print("Sympy expression: ", expr)
+    print("Subs in point: [0.5, 0.5, 0.5]: ",
+          expr.subs( [(x0, 0.5), (x1, 0.5), (x2, 0.5)]))
+    print("Evalf in point: [0.5, 0.5, 0.5]: ",
+          expr.evalf(subs={x0:0.5, x1:0.5, x2:0.5}))
+    x = np.asarray([0.5, 0.5, 0.5])
+    x = np.reshape(x, (1, -1))
+    print("The poly in this point: ", p.predict(poly_features.fit_transform(x)))
 
     # use the fitted polynomial
     predicted_surface = np.zeros_like(dist)
