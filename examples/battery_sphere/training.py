@@ -43,9 +43,8 @@ def plot_3D(x, y, z, xlabel="x", ylabel="y", zlabel="z", title="3D plot"):
     ax.set_title(title)
     plt.show()
 
-
-# X is 3D
-# Y is the output
+# X is 3D: diameter, capacity, mass
+# Y is the output: Pareto-distance
 def fit_poly(X, Y, deg):
     # generate a model of polynomial features
     poly_features = PolynomialFeatures(degree=deg)
@@ -59,101 +58,140 @@ def fit_poly(X, Y, deg):
 
     return p, poly_features
 
-
 if __name__ == '__main__':
+    # read data
     raw_points = PointCloud.load(filename='sphere_battery_packing.csv', delimiter=';')
-    pruned_points = raw_points.prune_pareto_front(directions=[-1, 0, 0, 0, 0, 1, -1])
-
+    direction_pattern = [-1, 0, 0, 0, 0, 1, -1]
+    # prune points
+    pruned_points = raw_points.prune_pareto_front(directions=direction_pattern)
+    # project points down to 3D
     raw_points = raw_points.projection(["sphere_D", "total_CAP", "total_MASS"])
     pruned_points = pruned_points.projection(["sphere_D", "total_CAP", "total_MASS"])
-
-    raw_points.float_data[:, 1] /= np.max(raw_points.float_data.numpy()[:, 1])
-    raw_points.float_data[:, 2] /= np.max(raw_points.float_data.numpy()[:, 2])
-    pruned_points.float_data[:, 1] /= np.max(pruned_points.float_data.numpy()[:, 1])
-    pruned_points.float_data[:, 2] /= np.max(pruned_points.float_data.numpy()[:, 2])
-
-    plot_3D(raw_points.float_data[:, 0],
-            raw_points.float_data[:, 1],
-            raw_points.float_data[:, 2],
-            "Sphere diameter",
-            "Total capacity",
-            "Total mass",
-            "Original point cloud")
-
-    plot_3D(pruned_points.float_data[:, 0],
-            pruned_points.float_data[:, 1],
-            pruned_points.float_data[:, 2],
-            "Sphere diameter",
-            "Total capacity",
-            "Total mass",
-            "Pruned point cloud")
-
-    diams = torch.linspace(0.0, 1.0, 40)
-    cap = torch.linspace(0.0, 1.0, 40)
-    masses = torch.linspace(0.0, 1.0, 40)
+    # normalize data
+    max_cap = np.max(raw_points.float_data.numpy()[:, 1])
+    max_mass = np.max(raw_points.float_data.numpy()[:, 2])
+    raw_points.float_data[:, 1] /= max_cap
+    raw_points.float_data[:, 2] /= max_mass
+    pruned_points.float_data[:, 1] /= max_cap
+    pruned_points.float_data[:, 2] /= max_mass
+    # visualize and compare raw and pruned points
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    ax.scatter(raw_points.float_data[:, 0],
+               raw_points.float_data[:, 1],
+               raw_points.float_data[:, 2], s=0.5, marker='.')
+    ax.scatter(pruned_points.float_data[:, 0],
+               pruned_points.float_data[:, 1],
+               pruned_points.float_data[:, 2], marker='.', c="r")
+    ax.set_xlabel("Sphere diameter")
+    ax.set_ylabel("Total capacity")
+    ax.set_zlabel("Total mass")
+    ax.set_title("Battery packing problem Point cloud")
+    ax.legend(["Raw", "Pruned"])
+    plt.show()
+    # generate a mesh for training
+    mesh_gran = 20
+    diams = torch.linspace(0.0, 1.0, mesh_gran)
+    cap = torch.linspace(0.0, 1.0, mesh_gran)
+    masses = torch.linspace(0.0, 1.0, mesh_gran)
     mesh = torch.stack(torch.meshgrid(diams, cap, masses), dim=-1)  # 40,40,40,3
     mesh.double()
-    dist = pruned_points.get_pareto_distance(directions=[-1, 1, -1], points=mesh)  # 40,40,40
+    # set optimization directions
+    direction_pattern = [-1, 1, -1]
+    dist = pruned_points.get_pareto_distance(directions=direction_pattern, points=mesh)  # 40,40,40
 
-    X = mesh.numpy()
-    X = np.reshape(X, (-1, 3))
+    # prepare training data
     Y = dist.numpy()
     Y = np.reshape(Y, (-1, 1))
 
+    X = mesh.numpy()
+    X = np.reshape(X, (-1, 3))
+    # only positive distances are kept
+    X = X[np.where(Y>0)[0]]
+    Y = Y[np.where(Y>0)[0]]
+
+
     # fit a higher order multivariate polynomial
-    p, poly_features = fit_poly(X, Y, 5)
+    poly_deg = 5
+    p, poly_features = fit_poly(X, Y, poly_deg)
 
     # produce sympy expression from the fitted poly
     feature_names = poly_features.get_feature_names()
+    #print("features: ", feature_names)
     coefficients = p.coef_.tolist()
-    sympy_expr = ""
-    for c,f in zip(feature_names, coefficients[0]):
-        if(f < 0):
-            sympy_expr += str(f)+"*"+c
-            #print(str(f)+"*"+c, end='')
+    #print("Coeffs: ", coefficients)
+    sympy_expr = str(float(p.intercept_))
+    for c, f in zip(feature_names, coefficients[0]):
+        if (f < 0):
+            sympy_expr += str(f) + "*" + c
+            # print(str(f)+"*"+c, end='')
         else:
-            sympy_expr += "+"+str(f) + "*" + c
-            #print("+"+str(f) + "*" + c, end='')
-    #print()
+            sympy_expr += "+" + str(f) + "*" + c
+            # print("+"+str(f) + "*" + c, end='')
+    # print()
     sympy_expr = sympy_expr.replace("^", "**")
     sympy_expr = sympy_expr.replace(" ", "*")
     expr = sympify(sympy_expr)
     x0, x1, x2 = symbols("x0 x1 x2")
     print("Sympy expression: ", expr)
-    print("Subs in point: [0.5, 0.5, 0.5]: ",
-          expr.subs( [(x0, 0.5), (x1, 0.5), (x2, 0.5)]))
     print("Evalf in point: [0.5, 0.5, 0.5]: ",
-          expr.evalf(subs={x0:0.5, x1:0.5, x2:0.5}))
+          expr.evalf(subs={x0: 0.5, x1: 0.5, x2: 0.5}))
     x = np.asarray([0.5, 0.5, 0.5])
     x = np.reshape(x, (1, -1))
-    print("The poly in this point: ", p.predict(poly_features.fit_transform(x)))
+    x = poly_features.fit_transform(x)
+    print("The poly in this point: ", float(p.predict(x)[0]))
 
-    # use the fitted polynomial
+    # compare results
     predicted_surface = np.zeros_like(dist)
     real_surface = np.zeros_like(dist)
+    sympy_surface = np.zeros_like(dist)
     for i in range(mesh.numpy().shape[0]):
         for j in range(mesh.numpy().shape[1]):
             for k in range(mesh.numpy().shape[2]):
                 x = mesh[i, j, k]
                 x = np.reshape(x, (1, -1))
                 predicted_surface[i, j, k] = p.predict(poly_features.fit_transform(x))
-                real_surface[i, j, k] = pruned_points.get_pareto_distance(directions=[-1, 1, -1], points=mesh[i, j, k])
-
+                real_surface[i, j, k] = pruned_points.get_pareto_distance(directions=direction_pattern, points=mesh[i, j, k])
+                sympy_surface[i, j, k] = max(expr.evalf(subs={x0: float(x[0][0]),
+                                                          x1: float(x[0][1]),
+                                                          x2: float(x[0][2])}), 0)
     # checking
-    selected_weigth_id = 0
-    plot_3D(mesh[:, :, selected_weigth_id, 0].numpy(),
-            mesh[:, :, selected_weigth_id, 1].numpy(),
-            real_surface[:, :, 0],
+    selected_weigth_id = 4
+    X = mesh[:, :, selected_weigth_id, 0].numpy()
+    Y = mesh[:, :, selected_weigth_id, 1].numpy()
+    plot_3D(X,
+            Y,
+            real_surface[:, :, selected_weigth_id],
             "Sphere diameter",
             "Total capacity",
             "Pareto distance",
             "Real surface")
-
-    selected_weigth_id = 0
-    plot_3D(mesh[:, :, selected_weigth_id, 0].numpy(),
-            mesh[:, :, selected_weigth_id, 1].numpy(),
-            predicted_surface[:, :, 0],
+    plot_3D(X,
+            Y,
+            predicted_surface[:, :, selected_weigth_id],
             "Sphere diameter",
             "Total capacity",
             "Pareto distance",
             "Predicted surface")
+    plot_3D(X,
+            Y,
+            sympy_surface[:, :, selected_weigth_id],
+            "Sphere diameter",
+            "Total capacity",
+            "Pareto distance",
+            "Sympy surface")
+
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    ax.scatter(X,
+               Y,
+               real_surface[:, :, selected_weigth_id], marker='.', c="b")
+    ax.scatter(X,
+               Y,
+               sympy_surface[:, :, selected_weigth_id], marker='+', c="r")
+    ax.set_xlabel("Sphere diameter")
+    ax.set_ylabel("Total capacity")
+    ax.set_zlabel("Pareto distance")
+    ax.set_title("Real VS Sympy pareto fronts" +
+                 " (mass:" +
+                 str(float(masses[selected_weigth_id]) * max_mass) + ")")
+    ax.legend(["Real", "Sympy"])
+    plt.show()
