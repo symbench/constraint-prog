@@ -19,7 +19,7 @@ from typing import Callable
 import matplotlib.pyplot as plt
 import torch
 
-from constraint_prog.func_approx import FourierFunc, PiecewiseLinearFunc
+from constraint_prog.param_funcs import FourierFunc, PiecewiseLinearFunc
 
 
 class ODEOptimizer:
