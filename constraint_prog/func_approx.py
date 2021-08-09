@@ -60,10 +60,8 @@ def approximate(func: sympy.Expr, points: 'PointCloud',
             assert len(params) == len(param_vars)
 
             sub = {var: params[idx] for idx, var in enumerate(param_vars)}
-            print(sub)
             points2 = points.evaluate(['result'], [func.subs(sub)])
             result = (points2['result'] - points[output]).numpy()
-            print(result)
             return result
 
     init = [1.0] * len(param_vars)
@@ -71,7 +69,12 @@ def approximate(func: sympy.Expr, points: 'PointCloud',
         Func(),
         init,
         diff_step=1e-5)
-    print(result)
+
+    if result.success:
+        print("INFO: approximation is successful with cost", result.cost)
+        print("INFO:", result.message)
+    else:
+        print("WARNING: apprixmation failed with cost", result.cost)
 
     return result.x
 
@@ -88,4 +91,4 @@ if __name__ == '__main__':
     data.append({'x': 3, 'y': 7})
     data.append({'x': 4, 'y': 9})
 
-    approximate(f, data, 'y')
+    print(approximate(f, data, 'y'))
