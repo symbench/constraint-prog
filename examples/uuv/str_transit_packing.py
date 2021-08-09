@@ -525,6 +525,16 @@ bounds = {
     "movable_roll_width": (0.05, 0.5),
 }
 
+resolutions = {
+    "battery1_capacity": 1000.0,
+    "battery2_capacity": 1000.0,
+    "foam1_length": 0.1,
+    "foam2_length": 0.1,
+    "foam3_length": 0.1,
+    "movable_pitch_length": 0.1,
+    "movable_roll_width": 0.1,
+}
+
 print("bounds dictionary", bounds)
 
 assert list(bounds.keys()) == list(constraints.input_names)
@@ -559,7 +569,7 @@ for _ in range(5):
     if not points.num_points:
         print("no points left")
         break
-    points.add_mutations([1000, 1000, 0.1, 0.1, 0.1, 0.1, 0.1], 10000)
+    points.add_mutations(resolutions, 10000, multiplier=2.0)
     points = points.newton_raphson(constraints, bounds)
     points = points.prune_by_tolerances(constraints(points), 0.1)
     points = points.prune_close_points([1000, 1000, 0.2, 0.2, 0.2, 0.1, 0.1])

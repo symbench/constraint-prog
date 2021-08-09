@@ -233,7 +233,7 @@ def test_newton_raphson():
     func = PointFunc(constraints)
 
     for _ in range(10):
-        points.add_mutations([0.5] * len(bounds), num_points)
+        points.add_mutations(0.5, num_points)
 
         points = points.newton_raphson(func, bounds)
 

@@ -199,8 +199,8 @@ class Explorer:
 
         # Prune bounding box
         output_data = output_data.prune_bounding_box(
-            minimums=self.constraints_min,
-            maximums=self.constraints_max)
+            {var: (self.constraints_min[idx], self.constraints_max[idx])
+             for idx, var in enumerate(self.func.input_names)})
         print("After bounding box pruning we have {} designs".format(
             output_data.num_points))
 

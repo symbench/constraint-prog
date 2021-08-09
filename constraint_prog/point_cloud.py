@@ -254,9 +254,10 @@ class PointCloud:
             -> 'PointCloud':
         """
         Performs the Newton-Raphson optimization on the point cloud where
-        the give func specifies the constraints that need to become zero,
+        the given func specifies the constraints that need to become zero,
         and returns a new point cloud with the result.
         """
+        assert bounds.keys() <= set(self.float_vars)
         input_data = torch.empty((self.num_points, len(func.input_names)),
                                  dtype=torch.float32, device=self.device)
         bounding_box = torch.empty((2, len(func.input_names)),
@@ -273,27 +274,34 @@ class PointCloud:
 
         return PointCloud(func.input_names, input_data)
 
-    def add_mutations(self, stddev: List[float], num_points: int):
+    def add_mutations(self, stddevs: Union[Dict[str, float], float],
+                      num_points: int, multiplier: float = 1.0):
         """
         Take random elements from the point cloud and add random mutations
         to the given coordinates so that the total number of points is
-        num_points.
+        num_points. If a coordinate is not listed in the dictionary, then
+        that value will not change.
         """
-        assert len(stddev) == self.num_float_vars
         count = num_points - self.num_points
         if count <= 0 or self.num_points <= 0:
             return
 
+        if isinstance(stddevs, float):
+            stddevs = torch.full((self.num_float_vars, ), stddevs * multiplier,
+                                 dtype=torch.float32, device=self.device)
+        else:
+            assert stddevs.keys() <= set(self.float_vars)
+            stddevs = torch.tensor(
+                [stddevs.get(var, 0.0) * multiplier for var in self.float_vars],
+                dtype=torch.float32, device=self.device)
+
         indices = torch.randint(0, self.num_points, (count, ), device=self.device)
         mutation = torch.randn((count, self.num_float_vars),
                                dtype=torch.float32, device=self.device)
-        mutation = mutation * torch.tensor([stddev],
-                                           dtype=torch.float32, device=self.device)
-        new_data = self.float_data[indices] + mutation
+        new_data = self.float_data[indices] + mutation * stddevs
         self.float_data = torch.cat((self.float_data, new_data), dim=0)
 
-        indices = indices.numpy()
-        new_data = self.string_data[indices]
+        new_data = self.string_data[indices.numpy()]
         self.string_data = numpy.concatenate((self.string_data, new_data), axis=0)
 
     def to_device(self, device="cpu"):
@@ -344,17 +352,20 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data[selected.numpy()])
 
-    def prune_bounding_box(self, minimums: List[float], maximums: List[float]) -> 'PointCloud':
+    def prune_bounding_box(self, bounds: Dict[str, Tuple[float, float]]) -> 'PointCloud':
         """
-        Returns those points that lie in the specified bounding box in a new
-        point cloud. The shape of the minimums and maximums lists must be of
-        shape [num_vars]. If no bound is necessary, then use -inf or inf for
-        that value.
+        Returns those points that lie in the specified bounding box. If a specific 
+        variable is not listed in the dictionary, then that value will not be used
+        in the pruning process.
         """
-        assert len(minimums) == self.num_float_vars and len(maximums) == self.num_float_vars
+        assert bounds.keys() <= set(self.float_vars)
+        minimums = torch.tensor(
+            [bounds[var][0] if var in bounds else -math.inf for var in self.float_vars],
+            dtype=torch.float32, device=self.device)
+        maximums = torch.tensor(
+            [bounds[var][1] if var in bounds else math.inf for var in self.float_vars],
+            dtype=torch.float32, device=self.device)
 
-        minimums = torch.tensor(minimums, dtype=torch.float32, device=self.device)
-        maximums = torch.tensor(maximums, dtype=torch.float32, device=self.device)
         sel1 = self.float_data >= minimums
         sel2 = self.float_data <= maximums
         sel3 = torch.logical_and(sel1, sel2).all(dim=1)
