@@ -36,9 +36,9 @@ class SympyFunc(object):
         self.input_names = []
         for expr in expressions:
             self.add_input_symbols(expr)
-        assert self.input_names
         self.input_names = sorted(self.input_names)
         self._input_data = []
+        self._input_shape = None
 
     def add_input_symbols(self, expr: sympy.Expr):
         """
@@ -68,6 +68,7 @@ class SympyFunc(object):
         [*, len(input_names)] and the output is of shape [*, len(expressions)].
         """
         assert input_data.shape[-1] == len(self.input_names)
+        self._input_shape = input_data.shape[:-1]
         self._input_data = input_data.unbind(dim=-1)
 
         output_data = []
@@ -132,14 +133,14 @@ class SympyFunc(object):
                 or expr.func == sympy.core.numbers.One
                 or expr.func == sympy.core.numbers.Pi
                 or expr.func == sympy.core.numbers.Half):
-            return torch.full(self._input_data[0].shape, float(expr),
+            return torch.full(self._input_shape, float(expr),
                               device=self.device)
         elif expr.func == sympy.Symbol:
             if expr.name not in self.input_names:
                 raise ValueError("unknown variable " + expr.name)
             return self._input_data[self.input_names.index(expr.name)]
         elif expr.func == BooleanTrue or expr.func == BooleanFalse:
-            return torch.full(self._input_data[0].shape, bool(expr),
+            return torch.full(self._input_shape, bool(expr),
                               device=self.device)
         elif expr.func == sympy.Add:
             value = self._eval(expr.args[0])

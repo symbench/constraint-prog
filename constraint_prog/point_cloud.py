@@ -18,7 +18,7 @@ from collections import Counter
 import csv
 import math
 import os
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Union, Tuple, Optional
 
 import matplotlib.pyplot as plt
 import numpy
@@ -30,12 +30,17 @@ from constraint_prog.newton_raphson import newton_raphson
 
 
 class PointCloud:
-    def __init__(self, float_vars: List[str], float_data: torch.Tensor,
-                 string_vars: List[str] = None, string_data: numpy.ndarray = None):
+    def __init__(self, float_vars: List[str],
+                 float_data: Optional[torch.Tensor] = None,
+                 string_vars: Optional[List[str]] = None,
+                 string_data: Optional[numpy.ndarray] = None):
         """
         Creates a point cloud with num_vars many named coordinates.
         The shape of the float_data must be [num_points, num_vars].
         """
+        if float_data is None:
+            float_data = torch.empty((0, len(float_vars)), dtype=torch.float32)
+
         assert float_data.ndim == 2
         assert float_data.shape[1] == len(float_vars)
 
@@ -484,7 +489,11 @@ class PointCloud:
         for var in func.input_names:
             idx = self.float_vars.index(var)
             input_data.append(self.float_data[:, idx])
-        input_data = torch.stack(input_data, dim=1)
+        if input_data:
+            input_data = torch.stack(input_data, dim=1)
+        else:
+            input_data = torch.empty((self.num_points, 0),
+                                     dtype=torch.float32, device=self.device)
 
         return PointCloud(float_vars=variables,
                           float_data=func(input_data),
@@ -506,6 +515,19 @@ class PointCloud:
                           float_data=float_data,
                           string_vars=string_vars,
                           string_data=string_data)
+
+    def append(self, row: Dict[str, Union[float, str]]):
+        """
+        Adds a new row to the point cloud. The row dictionary must contain
+        a value for each variables.
+        """
+        float_row = [float(row[var]) for var in self.float_vars]
+        float_row = torch.tensor([float_row], dtype=torch.float32)
+        self.float_data = torch.cat((self.float_data, float_row), axis=0)
+
+        string_row = [str(row[var]) for var in self.string_vars]
+        string_row = numpy.array([string_row], dtype=str)
+        self.string_data = numpy.concatenate((self.string_data, string_row), axis=0)
 
     def projection(self, variables: List[str]) -> 'PointCloud':
         """

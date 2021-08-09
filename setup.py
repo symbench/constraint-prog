@@ -30,7 +30,9 @@ setup(
         # pip3 install torch==1.8.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
         'torch>=1.5',
         'matplotlib',
-        'sympy'
+        'sympy',
+        'numpy',
+        'scipy',
     ],
     entry_points={
         'console_scripts': [
