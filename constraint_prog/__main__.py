@@ -18,13 +18,14 @@ import argparse
 import sys
 
 from constraint_prog import explorer
+from constraint_prog.point_cloud import run_pareto_front
 
 
 def run():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('command', help="""
-    uuv-test1, uuv-test2, explore
+    explore, pareto-front
     """)
     args = parser.parse_args(sys.argv[1:2])
 
@@ -34,6 +35,8 @@ def run():
 
     if args.command == 'explore':
         explorer.main(args=sys.argv[2:])
+    elif args.command == 'pareto-front':
+        run_pareto_front(args=sys.argv[2:])
     else:
         parser.print_help()
 

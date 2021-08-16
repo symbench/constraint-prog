@@ -36,7 +36,8 @@ class PointCloud:
                  string_data: Optional[numpy.ndarray] = None):
         """
         Creates a point cloud with num_vars many named coordinates.
-        The shape of the float_data must be [num_points, num_vars].
+        The shape of the float_data must be [num_points, len(float_vars)], and
+        the shape of the string_data must be [num_points, len(string_vars)].
         """
         if float_data is None:
             float_data = torch.empty((0, len(float_vars)), dtype=torch.float32)
@@ -193,7 +194,7 @@ class PointCloud:
             if len(string_vars) < 1:
                 string_vars, string_data = None, None
             else:
-                string_data = numpy.array(string_data)
+                string_data = numpy.array(string_data).transpose()
 
             return PointCloud(float_vars=float_vars,
                               float_data=float_data,
@@ -516,6 +517,21 @@ class PointCloud:
                           string_vars=string_vars,
                           string_data=string_data)
 
+    def concat(self, other: 'PointCloud') -> 'PointCloud':
+        """
+        Concatenates this point cloud with the other and returns a new point
+        cloud that has the data from both. The float and string variables must
+        be the same in the two datasets.
+        """
+        assert self.float_vars == other.float_vars
+        assert self.string_vars == other.string_vars
+        return PointCloud(
+            float_vars=self.float_vars,
+            float_data=torch.cat((self.float_data, other.float_data), dim=0),
+            string_vars=self.string_vars,
+            string_data=numpy.concatenate((self.string_data, other.string_data), axis=0)
+        )
+
     def append(self, row: Dict[str, Union[float, str]]):
         """
         Adds a new row to the point cloud. The row dictionary must contain
@@ -605,3 +621,56 @@ class PointFunc(object):
 
     def __repr__(self):
         return self.exprs.__repr__()
+
+
+def run_pareto_front(args=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('file', type=str,  nargs="+", metavar='FILE',
+                        help='a CSV file to read')
+    parser.add_argument('--info', action='store_true',
+                        help="prints out the variables of the data")
+    parser.add_argument('--pos', type=str, nargs="*", metavar='VAR', default=[],
+                        help='selects positive variables')
+    parser.add_argument('--neg', type=str, nargs="*", metavar='VAR', default=[],
+                        help='selects positive variables')
+    args = parser.parse_args(args)
+
+    points = None
+    for file in args.file:
+        print("Reading", file)
+        if points is None:
+            points = PointCloud.load(file)
+        else:
+            points = points.concat(PointCloud.load(file))
+
+    print("Loaded", points.num_points, "designs")
+
+    if args.info:
+        points.print_info()
+
+    for var in args.pos:
+        assert var in points.float_vars
+    for var in args.neg:
+        assert var in points.float_vars
+
+    if not args.pos and not args.neg:
+        return
+
+    points = points.projection(args.pos + args.neg)
+
+    dirs = []
+    for var in points.float_vars:
+        if var in args.pos:
+            dirs.append(1.0)
+        elif var in args.neg:
+            dirs.append(-1.0)
+        else:
+            dirs.append(0)
+
+    print("Pruning to the pareto front...")
+    points.prune_pareto_front(dirs)
+
+    print("After pruning we have", points.num_points, "designs")
