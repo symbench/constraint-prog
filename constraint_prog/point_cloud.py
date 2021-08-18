@@ -424,6 +424,53 @@ class PointCloud:
         assert float_data
         float_data = torch.stack(float_data, dim=1)
 
+        pareto_data = torch.empty_like(float_data)
+        pareto_idxs = torch.empty(self.num_points, dtype=int)
+        pareto_count = 0
+
+        for idx in range(self.num_points):
+            test = (pareto_data[:pareto_count] <= float_data[idx]).all(dim=1)
+            if test.any().item():
+                continue
+
+            test = (pareto_data[:pareto_count] < float_data[idx]).any(dim=1)
+            count = test.count_nonzero().item()
+            if count < pareto_count:
+                pareto_data[:count] = pareto_data[:pareto_count][test]
+                pareto_idxs[:count] = pareto_idxs[:pareto_count][test]
+                pareto_count = count
+
+            pareto_idxs[pareto_count] = idx
+            pareto_data[pareto_count] = float_data[idx]
+            pareto_count += 1
+
+        selected = torch.zeros(self.num_points, dtype=bool)
+        for idx in pareto_idxs[:pareto_count]:
+            selected[idx] = True
+
+        return PointCloud(float_vars=self.float_vars,
+                          float_data=self.float_data[selected],
+                          string_vars=self.string_vars,
+                          string_data=self.string_data[selected])
+
+    def prune_pareto_front_old(self, directions: List[float]) -> 'PointCloud':
+        """
+        This is the old and slow implementation of the pareto front pruning
+        algorithm.
+        """
+        assert len(directions) == self.num_float_vars
+
+        # gather data for minimization in all coordinates
+        float_data = []
+        for idx in range(self.num_float_vars):
+            if directions[idx] == 0.0:
+                continue
+            else:
+                data = self.float_data[:, idx]
+                float_data.append(data if directions[idx] < 0.0 else -data)
+        assert float_data
+        float_data = torch.stack(float_data, dim=1)
+
         # TODO: find a faster algorithm than this quadratic
         selected = torch.ones(self.num_points, dtype=bool)
         for idx in range(self.num_points):
@@ -659,8 +706,6 @@ def run_pareto_front(args=None):
     if not args.pos and not args.neg:
         return
 
-    points = points.projection(args.pos + args.neg)
-
     dirs = []
     for var in points.float_vars:
         if var in args.pos:
@@ -671,6 +716,12 @@ def run_pareto_front(args=None):
             dirs.append(0)
 
     print("Pruning to the pareto front...")
-    points.prune_pareto_front(dirs)
+    points = points.prune_pareto_front(dirs)
 
     print("After pruning we have", points.num_points, "designs")
+
+
+# if __name__ == '__main__':
+#     points = PointCloud.generate({'x': (0, 1), 'y': (1, 2), 'z': (2, 3)}, 1000000)
+#     points = points.prune_pareto_front([1, 1, 1])
+#     print(points.num_points)
