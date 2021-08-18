@@ -676,13 +676,15 @@ def run_pareto_front(args=None):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('file', type=str,  nargs="+", metavar='FILE',
-                        help='a CSV file to read')
+                        help='a CSV or NPZ file to read')
     parser.add_argument('--info', action='store_true',
                         help="prints out the variables of the data")
     parser.add_argument('--pos', type=str, nargs="*", metavar='VAR', default=[],
                         help='selects positive variables')
     parser.add_argument('--neg', type=str, nargs="*", metavar='VAR', default=[],
                         help='selects positive variables')
+    parser.add_argument('--save', type=str, metavar='FILE',
+                        help='save the pruned dataset to this file')
     args = parser.parse_args(args)
 
     points = None
@@ -715,11 +717,14 @@ def run_pareto_front(args=None):
         else:
             dirs.append(0)
 
-    print("Pruning to the pareto front...")
+    print("Pruning to the pareto front, please wait...")
     points = points.prune_pareto_front(dirs)
 
     print("After pruning we have", points.num_points, "designs")
 
+    if args.save:
+        print("Writing", args.save)
+        points.save(args.save)
 
 # if __name__ == '__main__':
 #     points = PointCloud.generate({'x': (0, 1), 'y': (1, 2), 'z': (2, 3)}, 1000000)
