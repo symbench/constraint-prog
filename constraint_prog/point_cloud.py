@@ -620,6 +620,23 @@ class PointCloud:
         ax1.set_ylabel(var2)
         plt.show()
 
+    def plot3d(self, var1: str, var2: str, var3: str, point_size: float = 5.0):
+        """
+        Plots the 3d projection of the point cloud to the given coordinates.
+        """
+        assert var1 in self.float_vars and var2 in self.float_vars and var3 in self.float_vars
+        fig = plt.figure()
+        ax1 = fig.add_subplot(projection='3d')
+        ax1.scatter(
+            self[var1].numpy(),
+            self[var2].numpy(),
+            self[var3].numpy(),
+            s=point_size)
+        ax1.set_xlabel(var1)
+        ax1.set_ylabel(var2)
+        ax1.set_zlabel(var3)
+        plt.show()
+
 
 class PointFunc(object):
     def __init__(self, exprs: Dict[str, sympy.Expr]):
@@ -758,5 +775,7 @@ def run_plot(args=None):
 
     if len(args.var) == 2:
         points.plot2d(args.var[0], args.var[1])
+    elif len(args.var) == 3:
+        points.plot3d(args.var[0], args.var[1], args.var[2])
     else:
         print("Invalid number of variables selected")
