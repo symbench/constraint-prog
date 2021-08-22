@@ -14,13 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Set, Dict, Callable, List
+from typing import Set, Dict, List, Callable
 
 import numpy
 import sympy
-import scipy.optimize
-
-from constraint_prog.point_cloud import PointCloud
+from scipy import optimize
 
 
 def get_symbols(expr: sympy.Expr) -> Set[str]:
@@ -41,42 +39,88 @@ def get_symbols(expr: sympy.Expr) -> Set[str]:
     return symbols
 
 
-def approximate(func: sympy.Expr, points: 'PointCloud',
-                output: str = 'result') -> Dict[str, float]:
+def evaluate(expr: sympy.Expr, input_data: Dict[str, numpy.ndarray]) -> numpy.ndarray:
     """
-    Takes a expression with input and parameter variables, a point cloud with
-    values for the input variables and a name for the output variable. The 
-    method tries to find the best parameter values for the non-input variables
-    that best approximates the output value from the point cloud.
+    Evaluates the given expression with the input data and returns the output.
+    All numpy array must be of the same size or at least broadcastable.
+    """
+    if (isinstance(expr, float) or isinstance(expr, int)
+            or expr.func == sympy.Float
+            or expr.func == sympy.Integer
+            or expr.func == sympy.core.numbers.Rational
+            or expr.func == sympy.core.numbers.NegativeOne
+            or expr.func == sympy.core.numbers.Zero
+            or expr.func == sympy.core.numbers.One
+            or expr.func == sympy.core.numbers.Pi
+            or expr.func == sympy.core.numbers.Half):
+        return numpy.full((), float(expr))
+    elif expr.func == sympy.Symbol:
+        return input_data[expr.name]
+    elif expr.func == sympy.Add:
+        value = evaluate(expr.args[0], input_data)
+        for arg in expr.args[1:]:
+            value = value + evaluate(arg, input_data)
+        return value
+    elif expr.func == sympy.Mul:
+        value = evaluate(expr.args[0], input_data)
+        for arg in expr.args[1:]:
+            value = value * evaluate(arg, input_data)
+        return value
+    elif expr.func == sympy.Pow:
+        assert len(expr.args) == 2
+        value0 = evaluate(expr.args[0], input_data)
+        value1 = float(expr.args[1])
+        return numpy.power(value0, value1)
+    else:
+        raise ValueError(
+            "Unknown symbolic expression " + str(type(expr)))
+
+
+def approximate(func: sympy.Expr, input_data: Dict[str, numpy.ndarray],
+                output_data: numpy.ndarray) -> Dict[str, float]:
+    """
+    Takes a expression with input and parameter variables, an input 
+    data set of shape [num_points, input_vars] and an output data
+    of shape [num_points]. Returns the mapping of parameter values
+    to floats that minimizes the square error of the calculated and
+    specified outputs.
     """
     symbols = get_symbols(func)
-    param_vars = sorted(symbols - set(points.float_vars))
-    input_vars = sorted(symbols.intersection(points.float_vars))
+    param_vars = list(symbols - set(input_data.keys()))
 
-    assert output in points.float_vars
+    # common shape
+    shape = numpy.broadcast(*input_data.values()).shape
 
-    class Func(Callable):
+    class Function(Callable):
         def __call__(self, params: List[float]):
             assert len(params) == len(param_vars)
+            func2 = func.subs({var: params[idx] for idx, var in enumerate(param_vars)})
+            output_data2 = evaluate(func2, input_data)
+            return output_data2 - output_data
 
-            sub = {var: params[idx] for idx, var in enumerate(param_vars)}
-            points2 = points.evaluate(['result'], [func.subs(sub)])
-            result = (points2['result'] - points[output]).numpy()
-            return result
+    class Jacobian(Callable):
+        def __init__(self):
+            self.diffs = [func.diff(var) for var in param_vars]
 
-    init = [1.0] * len(param_vars)
-    result = scipy.optimize.least_squares(
-        Func(),
-        init,
-        diff_step=1e-5)
+        def __call__(self, params: List[float]):
+            assert len(params) == len(param_vars)
+            subs = {var: params[idx] for idx, var in enumerate(param_vars)}
+            diffs = [evaluate(diff.subs(subs), input_data) for diff in self.diffs]
+            diffs = [numpy.broadcast_to(diff, shape) for diff in diffs]
+            return numpy.array(diffs).transpose()
 
-    if result.success:
-        print("INFO: approximation is successful with cost", result.cost)
-        print("INFO:", result.message)
-    else:
+    init = [0.0] * len(param_vars)
+    result = optimize.least_squares(
+        fun=Function(),
+        x0=init,
+        jac=Jacobian(),
+    )
+
+    if not result.success:
         print("WARNING: apprixmation failed with cost", result.cost)
 
-    return result.x
+    params = {var: result.x[idx] for idx, var in enumerate(param_vars)}
+    return params, result.cost
 
 
 if __name__ == '__main__':
@@ -85,10 +129,9 @@ if __name__ == '__main__':
     x = sympy.Symbol('x')
     f = a * x + b
 
-    data = PointCloud(['x', 'y'])
-    data.append({'x': 1, 'y': 3})
-    data.append({'x': 2, 'y': 5})
-    data.append({'x': 3, 'y': 7})
-    data.append({'x': 4, 'y': 9})
+    id = {
+        'x': numpy.array([1.0, 2.0, 3.0, 4.0])
+    }
+    od = numpy.array([3.0, 5.0, 7.0, 9.0])
 
-    print(approximate(f, data, 'y'))
+    print(approximate(f, id, od))
