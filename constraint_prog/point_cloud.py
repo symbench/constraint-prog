@@ -726,7 +726,39 @@ def run_pareto_front(args=None):
         print("Writing", args.save)
         points.save(args.save)
 
-# if __name__ == '__main__':
-#     points = PointCloud.generate({'x': (0, 1), 'y': (1, 2), 'z': (2, 3)}, 1000000)
-#     points = points.prune_pareto_front([1, 1, 1])
-#     print(points.num_points)
+
+def run_plot(args=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('file', type=str,  nargs="+", metavar='FILE',
+                        help='a CSV or NPZ file to read')
+    parser.add_argument('--info', action='store_true',
+                        help="prints out the variables of the data")
+    parser.add_argument('--var', type=str, nargs="*", metavar='VAR', default=[],
+                        help='selects variables to be plotted')
+    args = parser.parse_args(args)
+
+    points = None
+    for file in args.file:
+        print("Reading", file)
+        if points is None:
+            points = PointCloud.load(file)
+        else:
+            points = points.concat(PointCloud.load(file))
+
+    print("Loaded", points.num_points, "designs")
+
+    if args.info:
+        points.print_info()
+
+    for var in args.var:
+        assert var in points.float_vars
+
+    if len(args.var) == 2:
+        points.plot2d(
+            points.float_vars.index(args.var[0]),
+            points.float_vars.index(args.var[1]))
+    else:
+        print("Invalid number of variables selected")

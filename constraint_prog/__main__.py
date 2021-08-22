@@ -18,14 +18,14 @@ import argparse
 import sys
 
 from constraint_prog import explorer
-from constraint_prog.point_cloud import run_pareto_front
+from constraint_prog.point_cloud import run_pareto_front, run_plot
 
 
 def run():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('command', help="""
-    explore, pareto-front
+    explore, pareto-front, plot
     """)
     args = parser.parse_args(sys.argv[1:2])
 
@@ -37,6 +37,8 @@ def run():
         explorer.main(args=sys.argv[2:])
     elif args.command == 'pareto-front':
         run_pareto_front(args=sys.argv[2:])
+    elif args.command == 'plot':
+        run_plot(args=sys.argv[2:])
     else:
         parser.print_help()
 
