@@ -577,11 +577,12 @@ for _ in range(5):
     print(points.num_points)
 
 if points.num_points:
-    target_func(points).plot2d(0, 1)
-    # target_func(points).plot2d(0, 2)
-    target_func(points).plot2d(2, 3)
-    target_func(points).plot2d(4, 5)
-    target_func(points).plot2d(6, 7)
+    points2 = target_func(points)
+    points2.plot2d("total_battery_capacity", "vehicle_dry_mass")
+    # points2.plot2d("total_battery_capacity", "vehicle_inner_length")
+    points2.plot2d("vehicle_inner_length", "wing_x_center")
+    points2.plot2d("pitch_minimum_angle", "roll_minimum_angle")
+    points2.plot2d("battery1_capacity", "foam1_length")
     print_solutions(points, 10)
     points2 = points.extend(derived_values(points, equs_as_float=False))
     points2.save("str_transit_packing.csv")

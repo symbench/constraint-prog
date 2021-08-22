@@ -606,18 +606,18 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data)
 
-    def plot2d(self, idx1: int, idx2: int, point_size: float = 5.0):
+    def plot2d(self, var1: str, var2: str, point_size: float = 5.0):
         """
         Plots the 2d projection of the point cloud to the given coordinates.
         """
-        assert 0 <= idx1 < self.num_float_vars and 0 <= idx2 < self.num_float_vars
+        assert var1 in self.float_vars and var2 in self.float_vars
         fig, ax1 = plt.subplots()
         ax1.scatter(
-            self.float_data[:, idx1].numpy(),
-            self.float_data[:, idx2].numpy(),
+            self[var1].numpy(),
+            self[var2].numpy(),
             s=point_size)
-        ax1.set_xlabel(self.float_vars[idx1])
-        ax1.set_ylabel(self.float_vars[idx2])
+        ax1.set_xlabel(var1)
+        ax1.set_ylabel(var2)
         plt.show()
 
 
@@ -757,8 +757,6 @@ def run_plot(args=None):
         assert var in points.float_vars
 
     if len(args.var) == 2:
-        points.plot2d(
-            points.float_vars.index(args.var[0]),
-            points.float_vars.index(args.var[1]))
+        points.plot2d(args.var[0], args.var[1])
     else:
         print("Invalid number of variables selected")

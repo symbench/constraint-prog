@@ -48,24 +48,24 @@ def main_pareto():
     for _ in range(10):
         # mutate the existing points
         points.add_mutations(0.1, num)
-        # points.plot2d(0, 1)
+        # points.plot2d("x0", "x1")
 
         # solve the constraints and update points
         points = points.newton_raphson(constraints, bounds)
-        # points.plot2d(0, 1)
+        # points.plot2d("x0", "x1")
 
         # calculate the errors and prune points
         errors = constraints(points)
         points = points.prune_by_tolerances(errors, 1e-5)
-        # points.plot2d(0, 1)
+        # points.plot2d("x0", "x1")
 
         # prune pareto front and plot it again
         points = points.prune_pareto_front([-1, -1] + [0] * (dim - 2))
-        # points.plot2d(0, 1)
+        # points.plot2d("x0", "x1")
 
     print("final pareto designs:", points.float_data.shape)
     print(points.float_data[:5, :].numpy())
-    points.plot2d(0, 1)
+    points.plot2d("x0", "x1")
 
 
 def main_nr_dist():
