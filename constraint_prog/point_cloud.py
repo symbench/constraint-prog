@@ -718,9 +718,11 @@ def run_pareto_front(args=None):
         points.print_info()
 
     for var in args.pos:
-        assert var in points.float_vars
+        if var not in points.float_vars:
+            raise ValueError("invalid variable: " + var)
     for var in args.neg:
-        assert var in points.float_vars
+        if var not in points.float_vars:
+            raise ValueError("invalid variable: " + var)
 
     if not args.pos and not args.neg:
         return
