@@ -228,6 +228,18 @@ class SympyFunc(object):
             value0 = self._eval(expr.args[0])
             value1 = self._eval(expr.args[1])
             return value0 >= value1
+        elif expr.func == sympy.And:
+            value = self._eval(expr.args[0])
+            for arg in expr.args[1:]:
+                other = self._eval(arg)
+                value = torch.logical_and(value, other)
+            return value
+        elif expr.func == sympy.Or:
+            value = self._eval(expr.args[0])
+            for arg in expr.args[1:]:
+                other = self._eval(arg)
+                value = torch.logical_or(value, other)
+            return value
         elif expr.func == sympy.ceiling:
             assert len(expr.args) == 1
             value0 = self._eval(expr.args[0])
