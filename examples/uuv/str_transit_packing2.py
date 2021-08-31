@@ -37,11 +37,11 @@ antenna_dry_mass = 0.5  # kg
 antenna_length = 1.0  # m
 
 concrete_parameters = {
-   'mission_latitude': 45.0,
+   'mission_latitude': 80.0,
    'mission_maximum_depth': 3000.0,
-   'mission_transit_distance': 2000.0,
+   'mission_transit_distance': 2500.0,
    'mission_water_salinity': 34,
-   'mission_minimum_water_temperature': 2.0,
+   'mission_minimum_water_temperature': 0.0,
    #'vehicle_length_external': 2.4892,
    'vehicle_diameter_external': 0.45 + 0.0095504,
    'vehicle_fairing_thickness': 0.0047752,
@@ -49,10 +49,6 @@ concrete_parameters = {
    'vehicle_nose_length': 0.3556,
    'vehicle_tail_length': 0.5110,
    'vehicle_depth_rating': 3000.0,
-   'vehicle_material_density': 4.429,
-   'vehicle_material_youngs_modulus': 6.89e10,
-   'vehicle_material_yield_stress': 2.76e8,
-   'vehicle_material_poissons_ratio': 0.33,
    'payload_power_draw': 0.5,
    'payload_weight_in_air': 1.0,
    'payload_displaced_volume': 0.18,
@@ -144,10 +140,6 @@ vehicle_fairing_material_density = sympy.Symbol('vehicle_fairing_material_densit
 vehicle_nose_length = sympy.Symbol('vehicle_nose_length')  # m
 vehicle_tail_length = sympy.Symbol('vehicle_tail_length')  # m
 vehicle_depth_rating = sympy.Symbol('vehicle_depth_rating')  # m
-vehicle_material_density = sympy.Symbol('vehicle_material_density')  # g/cm^3
-vehicle_material_youngs_modulus = sympy.Symbol('vehicle_material_youngs_modulus')  # Pa
-vehicle_material_yield_stress = sympy.Symbol('vehicle_material_yield_stress')  # Pa
-vehicle_material_poissons_ratio = sympy.Symbol('vehicle_material_poissons_ratio')
 payload_power_draw = sympy.Symbol('payload_power_draw')  # W
 payload_weight_in_air = sympy.Symbol('payload_weight_in_air')  # kg
 payload_displaced_volume = sympy.Symbol('payload_displaced_volume')  # m^3
