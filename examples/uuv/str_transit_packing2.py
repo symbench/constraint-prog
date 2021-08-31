@@ -412,16 +412,16 @@ wing_root_chord = wing_root_chord.subs(concrete_parameters).evalf()
 wing_dry_mass = wing_dry_mass.subs(concrete_parameters).evalf()
 wing_thickness = wing_thickness.subs(concrete_parameters).evalf()
 wing_displacement = wing_displacement.subs(concrete_parameters).evalf()
-print('vehicle_fairing_dry_mass =', vehicle_fairing_dry_mass)
-print('vehicle_fairing_displacement =', vehicle_fairing_displacement)
-print('vehicle_inner_diameter =', vehicle_inner_diameter)
-print('maximum_buoyancy_required =', maximum_buoyancy_required)
-print('battery_capacity_required =', battery_capacity_required)
-print('wing_root_chord =', wing_root_chord)
-print('wing_dry_mass =', wing_dry_mass)
-print('wing_thickness =', wing_thickness)
-print('wing_displacement =', wing_displacement)
-
+print('\nForward calculation constants:\n')
+print('   vehicle_fairing_dry_mass =', vehicle_fairing_dry_mass)
+print('   vehicle_fairing_displacement =', vehicle_fairing_displacement)
+print('   vehicle_inner_diameter =', vehicle_inner_diameter)
+print('   maximum_buoyancy_required =', maximum_buoyancy_required)
+print('   battery_capacity_required =', battery_capacity_required)
+print('   wing_root_chord =', wing_root_chord)
+print('   wing_dry_mass =', wing_dry_mass)
+print('   wing_thickness =', wing_thickness)
+print('   wing_displacement =', wing_displacement)
 
 # calculated automatically
 antenna_displacement = antenna_dry_mass / ALUMINIUM_DENSITY * WATER_DENSITY_AT_SEA_LEVEL
@@ -443,16 +443,16 @@ pressure_vessel_dry_mass = (pressure_vessel_outer_volume - pressure_vessel_inner
     * ALUMINIUM_DENSITY  # kg
 pressure_vessel_displacement = pressure_vessel_outer_volume * WATER_DENSITY_AT_SEA_LEVEL
 
+print("   pressure_vessel_outer_diameter:", pressure_vessel_outer_diameter)
+print("   pressure_vessel_inner_diameter:", pressure_vessel_inner_diameter)
+print("   pressure_vessel_crush_pressure: ", glider_crush_pressure)
+print("   pressure_vessel_thickness:", pressure_vessel_thickness_sphere)
+print("   pressure_vessel_inner_volume:", pressure_vessel_inner_volume)
+print("   pressure_vessel_dry_mass:", pressure_vessel_dry_mass)
+print("   pressure_vessel_displacement:", pressure_vessel_displacement)
+
 if pressure_vessel_inner_volume * WATER_DENSITY_AT_SEA_LEVEL / 2 < maximum_buoyancy_required / GRAVITATIONAL_CONSTANT:
     print("not enough buoyancy force")
-
-print("pressure_vessel_outer_diameter:", pressure_vessel_outer_diameter)
-print("pressure_vessel_inner_diameter:", pressure_vessel_inner_diameter)
-print("pressure_vessel_crush_pressure: ", glider_crush_pressure)
-print("pressure_vessel_thickness:", pressure_vessel_thickness_sphere)
-print("pressure_vessel_inner_volume:", pressure_vessel_inner_volume)
-print("pressure_vessel_dry_mass:", pressure_vessel_dry_mass)
-print("pressure_vessel_displacement:", pressure_vessel_displacement)
 
 
 # ---------------
