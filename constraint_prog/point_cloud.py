@@ -358,9 +358,16 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data[selected.numpy()])
 
+    def prune_close_points2(self, resolutions: Union[Dict[str, float]], keep=1) -> 'PointCloud':
+        if isinstance(resolutions, float):
+            resolutions = [resolutions] * self.num_float_vars
+        else:
+            resolutions = [resolutions.get(var, 0.0) for var in self.float_vars]
+        return self.prune_close_points(resolutions, keep)
+
     def prune_bounding_box(self, bounds: Dict[str, Tuple[float, float]]) -> 'PointCloud':
         """
-        Returns those points that lie in the specified bounding box. If a specific 
+        Returns those points that lie in the specified bounding box. If a specific
         variable is not listed in the dictionary, then that value will not be used
         in the pruning process.
         """
@@ -384,8 +391,8 @@ class PointCloud:
     def prune_by_tolerances(self, errors: 'PointCloud',
                             tolerances: Union[Dict[str, float], float]) -> 'PointCloud':
         """
-        Returns those points where the given error magnitudes are smaller 
-        in absolute value than the given tolerances. The tolerances 
+        Returns those points where the given error magnitudes are smaller
+        in absolute value than the given tolerances. The tolerances
         dictionary must contain a value for each error magnitude names or
         it must be a float value which is applied for all errors.
         """
@@ -620,7 +627,7 @@ class PointCloud:
         ax1.set_ylabel(var2)
         plt.show()
 
-    def plot3d(self, var1: str, var2: str, var3: str, point_size: float = 5.0):
+    def plot3d(self, var1: str, var2: str, var3: str, point_size: float=5.0):
         """
         Plots the 3d projection of the point cloud to the given coordinates.
         """
