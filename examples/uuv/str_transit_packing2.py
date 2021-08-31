@@ -33,6 +33,7 @@ child_vehicle_length = 1.22  # m
 child_vehicle_diameter = 0.46  # m
 child_vehicle_cg = child_vehicle_length - 0.482  # m from bow
 child_vehicle_cb = child_vehicle_length - 0.619  # m from bow
+num_child_vehicles = 1
 antenna_dry_mass = 0.5  # kg
 antenna_length = 1.0  # m
 
@@ -161,9 +162,6 @@ wing_taper_ratio = sympy.Symbol('wing_taper_ratio')  # %
 wing_wetted_area = sympy.Symbol('wing_wetted_area')  # m^2
 wing_material_thickness = sympy.Symbol('wing_material_thickness')  # m
 wing_coefficient_of_lift = sympy.Symbol('wing_coefficient_of_lift')
-
-# TODO: FIX THIS - SUPER HACKY AND INCORRECT:
-vehicle_length_external = vehicle_diameter_external * 8.0
 
 
 # OCEAN AND LOCATION-BASED EXPRESSIONS --------------------------------------------------------------------------------
@@ -395,7 +393,7 @@ aluminum_buckling_failure_sphere = sqrt(glider_crush_pressure *
                                         (0.365 * ALUMINIUM_YOUNG_MODULUS))
 aluminum_stress_failure_sphere = (glider_crush_pressure * 0.5 * pressure_vessel_outer_diameter) / \
     (2.0 * ALUMINIUM_YIELD_STRESS)
-pressure_vessel_thickness_sphere = max(
+pressure_vessel_thickness_sphere = sympy.Max(
     aluminum_buckling_failure_sphere, aluminum_stress_failure_sphere)
 pressure_vessel_inner_diameter = pressure_vessel_outer_diameter - 2 * pressure_vessel_thickness_sphere
 pressure_vessel_outer_volume = pi / 6 \
@@ -414,8 +412,8 @@ print("   pressure_vessel_inner_volume:", pressure_vessel_inner_volume)
 print("   pressure_vessel_dry_mass:", pressure_vessel_dry_mass)
 print("   pressure_vessel_displacement:", pressure_vessel_displacement)
 
-if pressure_vessel_inner_volume * WATER_DENSITY_AT_SEA_LEVEL / 2 < maximum_buoyancy_required / GRAVITATIONAL_CONSTANT:
-    print("not enough buoyancy force")
+#if pressure_vessel_inner_volume * WATER_DENSITY_AT_SEA_LEVEL / 2 < maximum_buoyancy_required / GRAVITATIONAL_CONSTANT:
+#    print("not enough buoyancy force")
 
 
 # ---------------
@@ -547,7 +545,6 @@ child_vehicle_x_center = vehicle_inner_length * sympy.Symbol("child_vehicle_x_re
 child_vehicle_x_left = child_vehicle_x_center - child_vehicle_length / 2
 child_vehicle_z_center = -pressure_vessel_outer_diameter / 2 - movable_pitch_diameter \
     - vehicle_hull_thickness - child_vehicle_diameter / 2
-
 
 def get_center_of_gravity(bladder: str, pitch: str, roll: str, antenna: str, children: int) \
         -> Tuple[sympy.Expr, sympy.Expr, sympy.Expr, sympy.Expr]:
@@ -763,62 +760,62 @@ battery_capacity_equation = battery1_capacity + battery2_capacity >= battery_cap
 
 pitch_minimum_cbmg_buoyancy, pitch_minimum_cbmg_x, pitch_minimum_cbmg_y, pitch_minimum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="empty", pitch="forward", roll="center", antenna="on", children=1)
-pitch_minimum_equation1 = -pitch_minimum_cbmg_x / pitch_minimum_cbmg_z <= math.tan(-60 * pi / 180)
-pitch_minimum_equation2 = pitch_minimum_cbmg_buoyancy <= \
+pitch_minimum_equation1_stage1 = -pitch_minimum_cbmg_x / pitch_minimum_cbmg_z <= math.tan(-60 * pi / 180)
+pitch_minimum_equation2_stage1 = pitch_minimum_cbmg_buoyancy <= \
     -maximum_buoyancy_required / GRAVITATIONAL_CONSTANT  # sinks to bottom
 
 pitch_minimum_cbmg_buoyancy, pitch_minimum_cbmg_x, pitch_minimum_cbmg_y, pitch_minimum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="empty", pitch="forward", roll="center", antenna="off", children=0)
-pitch_minimum_equation3 = -pitch_minimum_cbmg_x / pitch_minimum_cbmg_z <= math.tan(-60 * pi / 180)
-pitch_minimum_equation4 = pitch_minimum_cbmg_buoyancy <= \
+pitch_minimum_equation1_stage2 = -pitch_minimum_cbmg_x / pitch_minimum_cbmg_z <= math.tan(-60 * pi / 180)
+pitch_minimum_equation2_stage2 = pitch_minimum_cbmg_buoyancy <= \
     -maximum_buoyancy_required / GRAVITATIONAL_CONSTANT  # sinks to bottom
 
 pitch_maximum_cbmg_buoyancy, pitch_maximum_cbmg_x, pitch_maximum_cbmg_y, pitch_maximum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="full", pitch="aft", roll="center", antenna="on", children=1)
-pitch_maximum_equation1 = -pitch_maximum_cbmg_x / pitch_maximum_cbmg_z >= math.tan(60 * pi / 180)
+pitch_maximum_equation1_stage1 = -pitch_maximum_cbmg_x / pitch_maximum_cbmg_z >= math.tan(60 * pi / 180)
 
 pitch_maximum_cbmg_buoyancy, pitch_maximum_cbmg_x, pitch_maximum_cbmg_y, pitch_maximum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="full", pitch="aft", roll="center", antenna="off", children=0)
-pitch_maximum_equation2 = -pitch_maximum_cbmg_x / pitch_maximum_cbmg_z >= math.tan(60 * pi / 180)
+pitch_maximum_equation1_stage2 = -pitch_maximum_cbmg_x / pitch_maximum_cbmg_z >= math.tan(60 * pi / 180)
 
 pitch_neutral_cbmg_buoyancy, pitch_neutral_cbmg_x, pitch_neutral_cbmg_y, pitch_neutral_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="center", antenna="on", children=1)
-pitch_neutral_equation1 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(1.5 * pi / 180)
-pitch_neutral_equation2 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-1.5 * pi / 180)
-pitch_neutral_equation3 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
+pitch_neutral_equation1_stage1 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(allowable_pitch_error_at_neutral * pi / 180)
+pitch_neutral_equation2_stage1 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-allowable_pitch_error_at_neutral * pi / 180)
+pitch_neutral_equation3_stage1 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
 
 pitch_neutral_cbmg_buoyancy, pitch_neutral_cbmg_x, pitch_neutral_cbmg_y, pitch_neutral_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="center", antenna="off", children=0)
-pitch_neutral_equation4 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(1.5 * pi / 180)
-pitch_neutral_equation5 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-1.5 * pi / 180)
-pitch_neutral_equation6 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
+pitch_neutral_equation1_stage2 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(allowable_pitch_error_at_neutral * pi / 180)
+pitch_neutral_equation2_stage2 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-allowable_pitch_error_at_neutral * pi / 180)
+pitch_neutral_equation3_stage2 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
 
 roll_minimum_cbmg_buoyancy, roll_minimum_cbmg_x, roll_minimum_cbmg_y, roll_minimum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port", antenna="on", children=1)
-roll_minimum_equation1 = -roll_minimum_cbmg_y / roll_minimum_cbmg_z <= math.tan(-20 * pi / 180)
+roll_minimum_equation1_stage1 = -roll_minimum_cbmg_y / roll_minimum_cbmg_z <= math.tan(-20 * pi / 180)
 
 roll_minimum_cbmg_buoyancy, roll_minimum_cbmg_x, roll_minimum_cbmg_y, roll_minimum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port", antenna="off", children=0)
-roll_minimum_equation2 = -roll_minimum_cbmg_y / roll_minimum_cbmg_z <= math.tan(-20 * pi / 180)
+roll_minimum_equation1_stage2 = -roll_minimum_cbmg_y / roll_minimum_cbmg_z <= math.tan(-20 * pi / 180)
 
 constraints = PointFunc({
    "battery1_packing_equation": battery1_packing_equation,
    "battery2_packing_equation": battery2_packing_equation,
    "battery_capacity_equation": battery_capacity_equation,
-   "pitch_minimum_equation1": pitch_minimum_equation1,
-   # "pitch_minimum_equation2": pitch_minimum_equation2,
-   "pitch_minimum_equation3": pitch_minimum_equation3,
-   # "pitch_minimum_equation4": pitch_minimum_equation4,
-   "pitch_maximum_equation1": pitch_maximum_equation1,
-   "pitch_maximum_equation2": pitch_maximum_equation2,
-   "pitch_neutral_equation1": pitch_neutral_equation1,
-   "pitch_neutral_equation2": pitch_neutral_equation2,
-   "pitch_neutral_equation3": pitch_neutral_equation3,
-   # "pitch_neutral_equation4": pitch_neutral_equation4,
-   # "pitch_neutral_equation5": pitch_neutral_equation5,
-   # "pitch_neutral_equation6": pitch_neutral_equation6,
-   "roll_minimum_equation1": roll_minimum_equation1,
-   "roll_minimum_equation2": roll_minimum_equation2,
+   #"pitch_minimum_equation1_stage1": pitch_minimum_equation1_stage1,
+   #"pitch_minimum_equation2_stage1": pitch_minimum_equation2_stage1,
+   #"pitch_minimum_equation1_stage2": pitch_minimum_equation1_stage2,
+   #"pitch_minimum_equation2_stage2": pitch_minimum_equation2_stage2,
+   #"pitch_maximum_equation1_stage1": pitch_maximum_equation1_stage1,
+   #"pitch_maximum_equation1_stage2": pitch_maximum_equation1_stage2,
+   "pitch_neutral_equation1_stage1": pitch_neutral_equation1_stage1,
+   "pitch_neutral_equation2_stage1": pitch_neutral_equation2_stage1,
+   "pitch_neutral_equation3_stage1": pitch_neutral_equation3_stage1,
+   #"pitch_neutral_equation1_stage2": pitch_neutral_equation1_stage2,
+   #"pitch_neutral_equation2_stage2": pitch_neutral_equation2_stage2,
+   #"pitch_neutral_equation3_stage2": pitch_neutral_equation3_stage2,
+   "roll_minimum_equation1_stage1": roll_minimum_equation1_stage1,
+   "roll_minimum_equation1_stage2": roll_minimum_equation1_stage2,
    # "finess_ratio_equation": vehicle_inner_length <= 10 * vehicle_inner_diameter,
    # "roll_dry_mass_equation": movable_roll_dry_mass <= 20,
    # "vehicle_dry_mass_equation": vehicle_dry_mass_stage1 <= 190,
@@ -885,7 +882,8 @@ derived_values = PointFunc({
    "vehicle_dry_mass_stage1": vehicle_dry_mass_stage1,
    "vehicle_dry_mass_stage2": vehicle_dry_mass_stage2,
    "vehicle_inner_length": vehicle_inner_length,
-   "vehicle_finess_ratio": vehicle_inner_length / vehicle_inner_diameter,
+   'vehicle_inner_volume': pi * (vehicle_inner_diameter/2)**2 * vehicle_inner_length,
+   "vehicle_fineness_ratio": vehicle_inner_length / vehicle_inner_diameter,
    "antenna_x_center": antenna_x_center,
    "antenna_z_center": antenna_z_center,
    "child_vehicle_x_center": child_vehicle_x_center,
@@ -893,27 +891,29 @@ derived_values = PointFunc({
 })
 
 def print_solutions(points, num=None):
-    points = points.extend(derived_values(points, equs_as_float=False))
-    if num is None:
-        num = points.num_points
-    else:
-        num = min(num, points.num_points)
-    for sol in range(num):
-        print("solution #:", sol)
-        for idx, var in enumerate(points.float_vars):
-            print(var + ":", points.float_data[sol, idx].item())
-        print()
+   points = points.extend(derived_values(points, equs_as_float=False))
+   if num is None:
+      num = points.num_points
+   else:
+      num = min(num, points.num_points)
+   for sol in range(num):
+      print("\nSolution #:", sol)
+      for idx, var in enumerate(points.float_vars):
+         print(var + ":", points.float_data[sol, idx].item())
+   print()
 
 bounds = {
    "antenna_x_relpos": (0.25, 0.75),
-   "battery1_capacity": (0.0, float(battery_capacity_required)),
-   "battery2_capacity": (0.0, float(battery_capacity_required)),
+   "battery1_capacity": (0.0, 80000.0),
+   "battery2_capacity": (0.0, 80000.0),
    "child_vehicle_x_relpos": (0.25, 0.75),
    "foam1_length": (0.0, 2.0),
    "foam2_length": (0.0, 2.0),
    "foam3_length": (0.0, 2.0),
    "movable_pitch_length": (0.10, 1.0),
    "movable_roll_width": (0.05, 0.5),
+   "vehicle_length_external": (1.0, 10.0),
+   #"vehicle_diameter_external": (0.3, 2.0)
 }
 
 resolutions = {
@@ -926,15 +926,18 @@ resolutions = {
    "foam3_length": 0.1,
    "movable_pitch_length": 0.1,
    "movable_roll_width": 0.1,
+   "vehicle_length_external": 0.1,
+   #"vehicle_diameter_external": 0.1
 }
 
 print("\nConstraint variable bounds:", bounds)
 print("\nConstraint variable resolutions:", resolutions)
+print()
 
 assert list(bounds.keys()) == list(constraints.input_names)
 
 # generate random points
-points = PointCloud.generate(bounds, 10000)
+points = PointCloud.generate(bounds, 50000)
 
 # minimize errors with newton raphson
 points = points.newton_raphson(constraints, bounds)
@@ -946,7 +949,7 @@ errors = constraints(points)
 
 # check constraints with loose tolerance
 points = points.prune_by_tolerances(errors, 0.5)
-print(points.num_points)
+print("Design points found:", points.num_points)
 
 target_func = PointFunc({
     "total_battery_capacity": battery1_capacity + battery2_capacity,
@@ -962,14 +965,14 @@ target_func = PointFunc({
 
 for step in range(5):
     if not points.num_points:
-        print("no points left")
+        print("No design points left!")
         break
     points.add_mutations(resolutions, 10000, multiplier=2.0)
     points = points.newton_raphson(constraints, bounds)
     points = points.prune_by_tolerances(constraints(points), 1.0 if step <= 2 else 0.1)
     points = points.prune_close_points2(resolutions)
     # points2 = points.extend(target_func(points))
-    print(points.num_points)
+    print("Design points found:", points.num_points)
 
 if points.num_points:
     points2 = target_func(points)
