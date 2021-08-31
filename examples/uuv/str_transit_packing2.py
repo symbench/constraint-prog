@@ -342,7 +342,7 @@ def get_center_of_gravity(bladder: str, pitch: str, roll: str, antenna: str, chi
 
     if children == 1:
         total_mass += child_vehicle_dry_mass
-        total_x_sum += child_vehicle_dry_mass * child_vehicle_x_center
+        total_x_sum += child_vehicle_dry_mass * (child_vehicle_x_left + child_vehicle_cg)
         total_z_sum += child_vehicle_dry_mass * child_vehicle_z_center
     else:
         assert children == 0
@@ -430,7 +430,7 @@ def get_center_of_buoyancy(bladder: str, pitch: str, roll: str, antenna: str, ch
 
     if children == 1:
         total_mass += child_vehicle_displacement
-        total_x_sum += child_vehicle_displacement * child_vehicle_x_center
+        total_x_sum += child_vehicle_displacement * (child_vehicle_x_left + child_vehicle_cb)
         total_z_sum += child_vehicle_displacement * child_vehicle_z_center
     else:
         assert children == 0
@@ -507,9 +507,9 @@ constraints = PointFunc({
     "pitch_neutral_equation1": pitch_neutral_equation1,
     "pitch_neutral_equation2": pitch_neutral_equation2,
     "pitch_neutral_equation3": pitch_neutral_equation3,
-    "pitch_neutral_equation4": pitch_neutral_equation4,
-    "pitch_neutral_equation5": pitch_neutral_equation5,
-    "pitch_neutral_equation6": pitch_neutral_equation6,
+    # "pitch_neutral_equation4": pitch_neutral_equation4,
+    # "pitch_neutral_equation5": pitch_neutral_equation5,
+    # "pitch_neutral_equation6": pitch_neutral_equation6,
     "roll_minimum_equation1": roll_minimum_equation1,
     "roll_minimum_equation2": roll_minimum_equation2,
     # "finess_ratio_equation": vehicle_inner_length <= 10 * vehicle_inner_diameter,
