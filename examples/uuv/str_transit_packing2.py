@@ -686,7 +686,7 @@ def get_center_of_gravity(bladder: str, pitch: str, roll: str, antenna: str, chi
 
     if children == 1:
         total_mass += child_vehicle_dry_mass
-        total_x_sum += child_vehicle_dry_mass* (child_vehicle_x_left + child_vehicle_cg)
+        total_x_sum += child_vehicle_dry_mass * (child_vehicle_x_left + child_vehicle_cg)
         total_z_sum += child_vehicle_dry_mass * child_vehicle_z_center
     else:
         assert children == 0
