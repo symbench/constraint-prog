@@ -901,8 +901,8 @@ def print_solutions(points, num=None):
 
 bounds = {
    "antenna_x_relpos": (0.25, 0.75),
-   "battery1_capacity": (0.0, battery_capacity_required),
-   "battery2_capacity": (0.0, battery_capacity_required),
+   "battery1_capacity": (0.0, float(battery_capacity_required)),
+   "battery2_capacity": (0.0, float(battery_capacity_required)),
    "child_vehicle_x_relpos": (0.25, 0.75),
    "foam1_length": (0.0, 2.0),
    "foam2_length": (0.0, 2.0),

@@ -271,6 +271,7 @@ class PointCloud:
         for idx, var in enumerate(func.input_names):
             input_data[:, idx] = self[var]
             bound = bounds.get(var, (-math.inf, math.inf))
+            assert isinstance(bound[0], float) and isinstance(bound[1], float)
             bounding_box[0, idx] = bound[0]
             bounding_box[1, idx] = bound[1]
 
