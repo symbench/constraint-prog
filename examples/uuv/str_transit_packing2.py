@@ -40,6 +40,7 @@ concrete_parameters = {
    'mission_latitude': 80.0,
    'mission_maximum_depth': 3000.0,
    'mission_transit_distance': 1500.0,
+   'mission_surveying_duration': 604800,
    'mission_water_salinity': 34,
    'mission_minimum_water_temperature': 0.0,
    #'vehicle_length_external': 2.4892,
@@ -49,8 +50,9 @@ concrete_parameters = {
    'vehicle_nose_length': 0.3556,
    'vehicle_tail_length': 0.5110,
    'vehicle_depth_rating': 3000.0,
-   'payload_power_draw': 0.5,
-   'hotel_power_draw': 2.0,
+   'payload_power_draw': 0.0,
+   'hotel_power_draw_in_transit': 1.0,
+   'hotel_power_draw_surveying': 2.0,
    'coefficient_of_drag': 0.23,
    'minimum_glide_slope': 15.0,
    'nominal_glide_slope': 35.0,
@@ -97,6 +99,7 @@ BATTERY_CAPACITY_PER_VOLUME = 1211e3  # Wh / m^3
 mission_latitude = sympy.Symbol('mission_latitude')  # decimal degrees
 mission_maximum_depth = sympy.Symbol('mission_maximum_depth')  # m
 mission_transit_distance = sympy.Symbol('mission_transit_distance')  # km
+mission_surveying_duration = sympy.Symbol('mission_surveying_duration')  # s
 mission_water_salinity = sympy.Symbol('mission_water_salinity')  # PSU
 mission_minimum_water_temperature = sympy.Symbol('mission_minimum_water_temperature')  # C
 vehicle_diameter_external = sympy.Symbol('vehicle_diameter_external')  # m
@@ -117,7 +120,8 @@ payload_module_external_diameter = sympy.Symbol('payload_module_external_diamete
 payload_module_external_nose_length = sympy.Symbol('payload_module_external_nose_length')  # m
 payload_module_external_tail_length = sympy.Symbol('payload_module_external_tail_length')  # m
 payload_module_external_center_length = sympy.Symbol('payload_module_external_center_length')  # m
-hotel_power_draw = sympy.Symbol('hotel_power_draw')  # W
+hotel_power_draw_in_transit = sympy.Symbol('hotel_power_draw_in_transit')  # W
+hotel_power_draw_surveying = sympy.Symbol('hotel_power_draw_surveying')  # W
 coefficient_of_drag = sympy.Symbol('coefficient_of_drag')  # unitless
 minimum_glide_slope = sympy.Symbol('minimum_glide_slope')  # degrees
 nominal_glide_slope = sympy.Symbol('nominal_glide_slope')  # degrees
@@ -273,7 +277,8 @@ mission_duration = dives_per_mission * dive_duration
 
 # ENERGY REQUIREMENT EXPRESSIONS --------------------------------------------------------------------------------------
 
-total_hotel_energy_required = mission_duration * hotel_power_draw
+total_hotel_energy_required = (mission_duration * hotel_power_draw_in_transit) + \
+   (mission_surveying_duration * hotel_power_draw_surveying)
 total_payload_energy_required = mission_duration * payload_power_draw
 total_propulsion_energy_required = dives_per_mission * buoyancy_engine_per_dive_energy
 total_mission_energy_required = total_hotel_energy_required + total_payload_energy_required + total_propulsion_energy_required
