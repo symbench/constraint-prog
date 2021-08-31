@@ -445,8 +445,10 @@ def get_buoyancy_minus_gravity(bladder: str, pitch: str, roll: str, antenna: str
     return cb_mass - cg_mass, cb_x - cg_x, cb_y - cg_y, cb_z - cg_z
 
 
-vehicle_dry_mass, _, _, _ = get_center_of_gravity(bladder="half", pitch="middle",
-                                                  roll="center", antenna="on", children=1)
+vehicle_dry_mass_stage1, _, _, _ = get_center_of_gravity(bladder="half", pitch="middle",
+                                                         roll="center", antenna="on", children=1)
+vehicle_dry_mass_stage2, _, _, _ = get_center_of_gravity(bladder="half", pitch="middle",
+                                                         roll="center", antenna="off", children=0)
 
 battery1_packing_equation = battery1_packing_volume <= pressure_vessel_inner_volume
 battery2_packing_equation = battery2_packing_volume <= pressure_vessel_inner_volume
@@ -501,15 +503,19 @@ constraints = PointFunc({
     "pitch_minimum_equation3": pitch_minimum_equation3,
     # "pitch_minimum_equation4": pitch_minimum_equation4,
     "pitch_maximum_equation1": pitch_maximum_equation1,
-    "pitch_maximum_equation2": pitch_maximum_equation1,
+    "pitch_maximum_equation2": pitch_maximum_equation2,
     "pitch_neutral_equation1": pitch_neutral_equation1,
     "pitch_neutral_equation2": pitch_neutral_equation2,
     "pitch_neutral_equation3": pitch_neutral_equation3,
+    "pitch_neutral_equation4": pitch_neutral_equation4,
+    "pitch_neutral_equation5": pitch_neutral_equation5,
+    "pitch_neutral_equation6": pitch_neutral_equation6,
     "roll_minimum_equation1": roll_minimum_equation1,
     "roll_minimum_equation2": roll_minimum_equation2,
     # "finess_ratio_equation": vehicle_inner_length <= 10 * vehicle_inner_diameter,
     # "roll_dry_mass_equation": movable_roll_dry_mass <= 20,
-    # "vehicle_dry_mass_equation": vehicle_dry_mass <= 190,
+    # "vehicle_dry_mass_equation": vehicle_dry_mass_stage1 <= 190,
+    "vehicle_pushing_force": vehicle_dry_mass_stage2 * 0.01 * GRAVITATIONAL_CONSTANT <= required_buoyancy_force,
 })
 
 print("constraint variables:", constraints.input_names)
@@ -569,7 +575,8 @@ derived_values = PointFunc({
     "vehicle_fairing_x_center": vehicle_fairing_x_center,
     "vehicle_fairing_z_center": vehicle_fairing_z_center,
     "total_battery_capacity": battery1_capacity + battery2_capacity,
-    "vehicle_dry_mass": vehicle_dry_mass,
+    "vehicle_dry_mass_stage1": vehicle_dry_mass_stage1,
+    "vehicle_dry_mass_stage2": vehicle_dry_mass_stage2,
     "vehicle_inner_length": vehicle_inner_length,
     "vehicle_finess_ratio": vehicle_inner_length / vehicle_inner_diameter,
     "antenna_x_center": antenna_x_center,
@@ -638,7 +645,8 @@ print(points.num_points)
 
 target_func = PointFunc({
     "total_battery_capacity": battery1_capacity + battery2_capacity,
-    "vehicle_dry_mass": vehicle_dry_mass,
+    "vehicle_dry_mass_stage1": vehicle_dry_mass_stage1,
+    "vehicle_dry_mass_stage2": vehicle_dry_mass_stage2,
     "vehicle_inner_length": vehicle_inner_length,
     "wing_x_center": wing_x_center,
     "pitch_minimum_angle": atan(-pitch_minimum_cbmg_x / pitch_minimum_cbmg_z) * 180 / pi,
@@ -647,20 +655,20 @@ target_func = PointFunc({
     "foam1_length": foam1_length,
 })
 
-for _ in range(5):
+for step in range(5):
     if not points.num_points:
         print("no points left")
         break
     points.add_mutations(resolutions, 10000, multiplier=2.0)
     points = points.newton_raphson(constraints, bounds)
-    points = points.prune_by_tolerances(constraints(points), 0.1)
+    points = points.prune_by_tolerances(constraints(points), 1.0 if step <= 2 else 0.1)
     points = points.prune_close_points2(resolutions)
     # points2 = points.extend(target_func(points))
     print(points.num_points)
 
 if points.num_points:
     points2 = target_func(points)
-    points2.plot2d("total_battery_capacity", "vehicle_dry_mass")
+    points2.plot2d("total_battery_capacity", "vehicle_dry_mass_stage1")
     # points2.plot2d("total_battery_capacity", "vehicle_inner_length")
     points2.plot2d("vehicle_inner_length", "wing_x_center")
     points2.plot2d("pitch_minimum_angle", "roll_minimum_angle")
