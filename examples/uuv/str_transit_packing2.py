@@ -393,7 +393,7 @@ aluminum_buckling_failure_sphere = sqrt(glider_crush_pressure *
                                         (0.365 * ALUMINIUM_YOUNG_MODULUS))
 aluminum_stress_failure_sphere = (glider_crush_pressure * 0.5 * pressure_vessel_outer_diameter) / \
     (2.0 * ALUMINIUM_YIELD_STRESS)
-pressure_vessel_thickness_sphere = max(
+pressure_vessel_thickness_sphere = sympy.Max(
     aluminum_buckling_failure_sphere, aluminum_stress_failure_sphere)
 pressure_vessel_inner_diameter = pressure_vessel_outer_diameter - 2 * pressure_vessel_thickness_sphere
 pressure_vessel_outer_volume = pi / 6 \
@@ -545,7 +545,6 @@ child_vehicle_x_center = vehicle_inner_length * sympy.Symbol("child_vehicle_x_re
 child_vehicle_x_left = child_vehicle_x_center - child_vehicle_length / 2
 child_vehicle_z_center = -pressure_vessel_outer_diameter / 2 - movable_pitch_diameter \
     - vehicle_hull_thickness - child_vehicle_diameter / 2
-
 
 def get_center_of_gravity(bladder: str, pitch: str, roll: str, antenna: str, children: int) \
         -> Tuple[sympy.Expr, sympy.Expr, sympy.Expr, sympy.Expr]:
@@ -784,14 +783,14 @@ pitch_neutral_cbmg_buoyancy, pitch_neutral_cbmg_x, pitch_neutral_cbmg_y, pitch_n
 pitch_neutral_equation1 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(allowable_pitch_error_at_neutral * pi / 180)
 pitch_neutral_equation2 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-allowable_pitch_error_at_neutral * pi / 180)
 pitch_neutral_equation3 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
-pitch_neutral_equation4 = sympy.Abs(atan(-pitch_neutral_cbmg_x / pitch_neutral_cbmg_z)) / pi <= allowable_pitch_error_at_neutral * pi / 180
+pitch_neutral_equation4 = sympy.Abs(atan(-pitch_neutral_cbmg_x / pitch_neutral_cbmg_z)) <= allowable_pitch_error_at_neutral * pi / 180
 
 pitch_neutral_cbmg_buoyancy, pitch_neutral_cbmg_x, pitch_neutral_cbmg_y, pitch_neutral_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="center", antenna="off", children=0)
 pitch_neutral_equation5 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(allowable_pitch_error_at_neutral * pi / 180)
 pitch_neutral_equation6 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-allowable_pitch_error_at_neutral * pi / 180)
 pitch_neutral_equation7 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
-pitch_neutral_equation8 = sympy.Abs(atan(-pitch_neutral_cbmg_x / pitch_neutral_cbmg_z)) / pi <= allowable_pitch_error_at_neutral * pi / 180
+pitch_neutral_equation8 = sympy.Abs(atan(-pitch_neutral_cbmg_x / pitch_neutral_cbmg_z)) <= allowable_pitch_error_at_neutral * pi / 180
 
 roll_minimum_cbmg_buoyancy, roll_minimum_cbmg_x, roll_minimum_cbmg_y, roll_minimum_cbmg_z = \
     get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port", antenna="on", children=1)
@@ -909,15 +908,16 @@ def print_solutions(points, num=None):
 
 bounds = {
    "antenna_x_relpos": (0.25, 0.75),
-   "battery1_capacity": (0.0, 80000.0),#float(battery_capacity_required)),
-   "battery2_capacity": (0.0, 80000.0),#float(battery_capacity_required)),
+   "battery1_capacity": (0.0, 80000.0),
+   "battery2_capacity": (0.0, 80000.0),
    "child_vehicle_x_relpos": (0.25, 0.75),
    "foam1_length": (0.0, 2.0),
    "foam2_length": (0.0, 2.0),
    "foam3_length": (0.0, 2.0),
    "movable_pitch_length": (0.10, 1.0),
    "movable_roll_width": (0.05, 0.5),
-   "vehicle_length_external": (1.0, 10.0)
+   "vehicle_length_external": (1.0, 10.0),
+   #"vehicle_diameter_external": (0.3, 2.0)
 }
 
 resolutions = {
@@ -930,7 +930,8 @@ resolutions = {
    "foam3_length": 0.1,
    "movable_pitch_length": 0.1,
    "movable_roll_width": 0.1,
-   "vehicle_length_external": 0.1
+   "vehicle_length_external": 0.1,
+   #"vehicle_diamter_external": 0.1
 }
 
 print("\nConstraint variable bounds:", bounds)
@@ -940,7 +941,7 @@ print()
 assert list(bounds.keys()) == list(constraints.input_names)
 
 # generate random points
-points = PointCloud.generate(bounds, 10000)
+points = PointCloud.generate(bounds, 50000)
 
 # minimize errors with newton raphson
 points = points.newton_raphson(constraints, bounds)
