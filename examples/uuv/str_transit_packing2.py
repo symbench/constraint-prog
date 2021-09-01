@@ -930,7 +930,7 @@ print()
 assert list(bounds.keys()) == list(constraints.input_names)
 
 # generate random points
-points = PointCloud.generate(bounds, 50000)
+points = PointCloud.generate(bounds, 10000)
 
 # minimize errors with newton raphson
 points = points.newton_raphson(constraints, bounds)
