@@ -40,8 +40,10 @@ antenna_length = 1.0  # m
 concrete_parameters = {
    'mission_latitude': 80.0,
    'mission_maximum_depth': 3000.0,
-   'mission_transit_distance': 1500.0,
+   'mission_transit_distance_stage1': 1000.0,
+   'mission_transit_distance_stage2': 500.0,
    'mission_surveying_duration': 604800,
+   'mission_max_duration_stage2': 259200,
    'mission_water_salinity': 34,
    'mission_minimum_water_temperature': 0.0,
    'vehicle_fairing_thickness': 0.0047752,
@@ -55,13 +57,14 @@ concrete_parameters = {
    'coefficient_of_drag': 0.23,
    'minimum_glide_slope': 15.0,
    'nominal_glide_slope': 35.0,
-   'nominal_horizontal_speed': 0.75,
+   'nominal_horizontal_speed_stage1': 0.75,
+   'nominal_horizontal_speed_stage2': 0.75,
    'peak_horizontal_speed': 1.5,
    'buoyancy_engine_pump_efficiency': 0.85,
    'buoyancy_engine_motor_efficiency': 0.7,
    'buoyancy_engine_fluid_displacement': 300,
    'buoyancy_engine_rpm': 1500.0,
-   'surveying_buoyancy_percent_of_weight': 0.01,
+   'surveying_buoyancy_percent': 0.03,
    'wing_span': 1.5178,
    'wing_taper_ratio': 0.3,
    'wing_wetted_area': 0.28096,
@@ -98,7 +101,8 @@ BATTERY_CAPACITY_PER_VOLUME = 1211e3  # Wh / m^3
 
 mission_latitude = sympy.Symbol('mission_latitude')  # decimal degrees
 mission_maximum_depth = sympy.Symbol('mission_maximum_depth')  # m
-mission_transit_distance = sympy.Symbol('mission_transit_distance')  # km
+mission_transit_distance_stage1 = sympy.Symbol('mission_transit_distance_stage1')  # km
+mission_transit_distance_stage2 = sympy.Symbol('mission_transit_distance_stage2')  # km
 mission_surveying_duration = sympy.Symbol('mission_surveying_duration')  # s
 mission_water_salinity = sympy.Symbol('mission_water_salinity')  # PSU
 mission_minimum_water_temperature = sympy.Symbol('mission_minimum_water_temperature')  # C
@@ -120,13 +124,14 @@ payload_module_external_diameter = sympy.Symbol('payload_module_external_diamete
 payload_module_external_nose_length = sympy.Symbol('payload_module_external_nose_length')  # m
 payload_module_external_tail_length = sympy.Symbol('payload_module_external_tail_length')  # m
 payload_module_external_center_length = sympy.Symbol('payload_module_external_center_length')  # m
-surveying_buoyancy_percent_of_weight = sympy.Symbol('surveying_buoyancy_percent_of_weight')  # %
+surveying_buoyancy_percent = sympy.Symbol('surveying_buoyancy_percent')  # %
 hotel_power_draw_in_transit = sympy.Symbol('hotel_power_draw_in_transit')  # W
 hotel_power_draw_surveying = sympy.Symbol('hotel_power_draw_surveying')  # W
 coefficient_of_drag = sympy.Symbol('coefficient_of_drag')  # unitless
 minimum_glide_slope = sympy.Symbol('minimum_glide_slope')  # degrees
 nominal_glide_slope = sympy.Symbol('nominal_glide_slope')  # degrees
-nominal_horizontal_speed = sympy.Symbol('nominal_horizontal_speed')  # m/s
+nominal_horizontal_speed_stage1 = sympy.Symbol('nominal_horizontal_speed_stage1')  # m/s
+nominal_horizontal_speed_stage2 = sympy.Symbol('nominal_horizontal_speed_stage2')  # m/s
 peak_horizontal_speed = sympy.Symbol('peak_horizontal_speed')  # m/s
 buoyancy_engine_pump_efficiency = sympy.Symbol('buoyancy_engine_pump_efficiency')  # percent
 buoyancy_engine_motor_efficiency = sympy.Symbol('buoyancy_engine_motor_efficiency')  # percent
@@ -234,15 +239,15 @@ vehicle_fairing_displacement = WATER_DENSITY_AT_SEA_LEVEL * (total_vehicle_wette
 
 # MISSION SPEED EXPRESSIONS -------------------------------------------------------------------------------------------
 
-nominal_glide_speed = nominal_horizontal_speed / cos(mpmath.radians(nominal_glide_slope))
+nominal_glide_speed = nominal_horizontal_speed_stage1 / cos(mpmath.radians(nominal_glide_slope))
 peak_glide_speed = peak_horizontal_speed / cos(mpmath.radians(nominal_glide_slope))
-nominal_vertical_speed = nominal_horizontal_speed * tan(mpmath.radians(nominal_glide_slope))
+nominal_vertical_speed = nominal_horizontal_speed_stage1 * tan(mpmath.radians(nominal_glide_slope))
 peak_vertical_speed = peak_horizontal_speed * tan(mpmath.radians(nominal_glide_slope))
 
 
 # DRAG FORCE EXPRESSIONS ----------------------------------------------------------------------------------------------
 
-reynolds_number_nominal_speed = WATER_DENSITY_AT_SEA_LEVEL * nominal_horizontal_speed * vehicle_diameter_external / seawater_absolute_viscosity
+reynolds_number_nominal_speed = WATER_DENSITY_AT_SEA_LEVEL * nominal_horizontal_speed_stage1 * vehicle_diameter_external / seawater_absolute_viscosity
 reynolds_number_maximum_speed = WATER_DENSITY_AT_SEA_LEVEL * peak_horizontal_speed * vehicle_diameter_external / seawater_absolute_viscosity
 coefficient_of_skin_friction = 1.328 / sqrt(reynolds_number_maximum_speed)
 nominal_form_drag_force = 0.5 * WATER_DENSITY_AT_SEA_LEVEL * nominal_glide_speed * nominal_glide_speed * total_vehicle_frontal_area * coefficient_of_drag
@@ -268,8 +273,8 @@ buoyancy_engine_per_dive_energy = buoyancy_engine_per_dive_pump_time * \
 # MISSION DURATION EXPRESSIONS ----------------------------------------------------------------------------------------
 
 dive_duration = buoyancy_engine_per_dive_pump_time + (2 * mission_maximum_depth / nominal_vertical_speed)
-dive_horizontal_distance = nominal_horizontal_speed * (2 * mission_maximum_depth / nominal_vertical_speed)
-dives_per_mission = ceiling(1000.0 * mission_transit_distance / dive_horizontal_distance)
+dive_horizontal_distance = nominal_horizontal_speed_stage1 * (2 * mission_maximum_depth / nominal_vertical_speed)
+dives_per_mission = ceiling(1000.0 * (mission_transit_distance_stage1 + mission_transit_distance_stage2) / dive_horizontal_distance)
 mission_duration = dives_per_mission * dive_duration
 
 
@@ -419,7 +424,7 @@ vehicle_fairing_displacement = vehicle_fairing_displacement.subs(concrete_parame
 vehicle_inner_diameter = vehicle_inner_diameter.subs(concrete_parameters).evalf()
 required_maximum_buoyancy = required_maximum_buoyancy.subs(concrete_parameters).evalf()
 battery_capacity_required = battery_capacity_required.subs(concrete_parameters).evalf()
-surveying_buoyancy_percent_of_weight = surveying_buoyancy_percent_of_weight.subs(concrete_parameters).evalf()
+surveying_buoyancy_percent = surveying_buoyancy_percent.subs(concrete_parameters).evalf()
 wing_root_chord = wing_root_chord.subs(concrete_parameters).evalf()
 wing_dry_mass = wing_dry_mass.subs(concrete_parameters).evalf()
 wing_thickness = wing_thickness.subs(concrete_parameters).evalf()
@@ -793,13 +798,15 @@ roll_minimum_cbmg_buoyancy_stage2, roll_minimum_cbmg_x_stage2, roll_minimum_cbmg
    get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port", antenna="off", children=0)
 roll_minimum_equation1_stage2 = -roll_minimum_cbmg_y_stage2 / roll_minimum_cbmg_z_stage2 <= math.tan(-20 * math.pi / 180)
 
+ice_counter_force_equation = vehicle_dry_mass_stage2 * surveying_buoyancy_percent * GRAVITATIONAL_CONSTANT <= required_maximum_buoyancy
+
 constraints = PointFunc({
    "vehicle_length_constraint": vehicle_length_external_equation,
    "battery1_packing_equation": battery1_packing_equation,
    "battery2_packing_equation": battery2_packing_equation,
    "battery_capacity_equation": battery_capacity_equation,
-   #"pitch_minimum_equation1_stage1": pitch_minimum_equation1_stage1,
-   #"pitch_minimum_equation2_stage1": pitch_minimum_equation2_stage1,
+   "pitch_minimum_equation1_stage1": pitch_minimum_equation1_stage1,
+   "pitch_minimum_equation2_stage1": pitch_minimum_equation2_stage1,
    #"pitch_minimum_equation1_stage2": pitch_minimum_equation1_stage2,
    #"pitch_minimum_equation2_stage2": pitch_minimum_equation2_stage2,
    #"pitch_maximum_equation1_stage1": pitch_maximum_equation1_stage1,
@@ -812,20 +819,27 @@ constraints = PointFunc({
    #"pitch_neutral_equation3_stage2": pitch_neutral_equation3_stage2,
    "roll_minimum_equation1_stage1": roll_minimum_equation1_stage1,
    "roll_minimum_equation1_stage2": roll_minimum_equation1_stage2,
-   "surveying_buoyancy_force": vehicle_dry_mass_stage2 * surveying_buoyancy_percent_of_weight * GRAVITATIONAL_CONSTANT <= required_maximum_buoyancy,
+   "surveying_buoyancy_force": ice_counter_force_equation,
 })
 
 print("\nConstraint variables:", constraints.input_names)
 print("\nConstraint equations:", list(constraints.output_names))
 
 derived_values = PointFunc({
-   "pitch_minimum_buoyancy": pitch_minimum_cbmg_buoyancy_stage1,
-   "pitch_minimum_angle": atan(-pitch_minimum_cbmg_x_stage1 / pitch_minimum_cbmg_z_stage1) * 180 / math.pi,
-   "pitch_neutral_buoyancy": pitch_neutral_cbmg_buoyancy_stage1,
-   "pitch_neutral_angle": atan(-pitch_neutral_cbmg_x_stage1 / pitch_neutral_cbmg_z_stage1) * 180 / math.pi,
-   "pitch_maximum_buoyancy": pitch_maximum_cbmg_buoyancy_stage1,
-   "pitch_maximum_angle": atan(-pitch_maximum_cbmg_x_stage1 / pitch_maximum_cbmg_z_stage1) * 180 / math.pi,
-   "roll_minimum_angle": atan(-roll_minimum_cbmg_y_stage1 / roll_minimum_cbmg_z_stage1) * 180 / math.pi,
+   "pitch_minimum_buoyancy_stage1": pitch_minimum_cbmg_buoyancy_stage1,
+   "pitch_minimum_angle_stage1": atan(-pitch_minimum_cbmg_x_stage1 / pitch_minimum_cbmg_z_stage1) * 180 / math.pi,
+   "pitch_neutral_buoyancy_stage1": pitch_neutral_cbmg_buoyancy_stage1,
+   "pitch_neutral_angle_stage1": atan(-pitch_neutral_cbmg_x_stage1 / pitch_neutral_cbmg_z_stage1) * 180 / math.pi,
+   "pitch_maximum_buoyancy_stage1": pitch_maximum_cbmg_buoyancy_stage1,
+   "pitch_maximum_angle_stage1": atan(-pitch_maximum_cbmg_x_stage1 / pitch_maximum_cbmg_z_stage1) * 180 / math.pi,
+   "roll_minimum_angle_stage1": atan(-roll_minimum_cbmg_y_stage1 / roll_minimum_cbmg_z_stage1) * 180 / math.pi,
+   "pitch_minimum_buoyancy_stage2": pitch_minimum_cbmg_buoyancy_stage2,
+   "pitch_minimum_angle_stage2": atan(-pitch_minimum_cbmg_x_stage2 / pitch_minimum_cbmg_z_stage2) * 180 / math.pi,
+   "pitch_neutral_buoyancy_stage2": pitch_neutral_cbmg_buoyancy_stage2,
+   "pitch_neutral_angle_stage2": atan(-pitch_neutral_cbmg_x_stage2 / pitch_neutral_cbmg_z_stage2) * 180 / math.pi,
+   "pitch_maximum_buoyancy_stage2": pitch_maximum_cbmg_buoyancy_stage2,
+   "pitch_maximum_angle_stage2": atan(-pitch_maximum_cbmg_x_stage2 / pitch_maximum_cbmg_z_stage2) * 180 / math.pi,
+   "roll_minimum_angle_stage2": atan(-roll_minimum_cbmg_y_stage2 / roll_minimum_cbmg_z_stage2) * 180 / math.pi,
    "foam1_x_center": foam1_x_center,
    "foam1_z_center": foam1_z_center,
    "foam1_volume": foam1_volume,
@@ -880,7 +894,7 @@ derived_values = PointFunc({
    "antenna_z_center": antenna_z_center,
    "child_vehicle_x_center": child_vehicle_x_center,
    "child_vehicle_z_center": child_vehicle_z_center,
-   "surveying_buoyancy_percent_of_weight": surveying_buoyancy_percent_of_weight
+   "surveying_buoyancy_percent": surveying_buoyancy_percent
 })
 
 def print_solutions(points, num=None):
@@ -960,7 +974,7 @@ for step in range(5):
     if not points.num_points:
         print("No design points left!")
         break
-    points.add_mutations(resolutions, 10000, multiplier=2.0)
+    points.add_mutations(resolutions, 50000, multiplier=2.0)
     points = points.newton_raphson(constraints, bounds)
     points = points.prune_by_tolerances(constraints(points), 1.0 if step <= 2 else 0.1)
     points = points.prune_close_points2(resolutions)
