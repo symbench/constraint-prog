@@ -250,12 +250,12 @@ nominal_friction_drag_force = 0.05 * WATER_DENSITY_AT_SEA_LEVEL * nominal_glide_
 nominal_buoyancy_required = (nominal_form_drag_force + nominal_friction_drag_force) * nominal_glide_speed / nominal_vertical_speed
 maximum_form_drag_force = 0.5 * WATER_DENSITY_AT_SEA_LEVEL * peak_glide_speed * peak_glide_speed * total_vehicle_frontal_area * coefficient_of_drag
 maximum_friction_drag_force = 0.05 * WATER_DENSITY_AT_SEA_LEVEL * peak_glide_speed * peak_glide_speed * total_vehicle_wetted_area * coefficient_of_skin_friction
-maximum_buoyancy_required = (maximum_form_drag_force + maximum_friction_drag_force) * peak_glide_speed / peak_vertical_speed
+required_maximum_buoyancy = (maximum_form_drag_force + maximum_friction_drag_force) * peak_glide_speed / peak_vertical_speed
 
 
 # BUOYANCY ENGINE EXPRESSIONS -----------------------------------------------------------------------------------------
 
-buoyancy_engine_fluid_mass = 2.0 * maximum_buoyancy_required / gravitational_acceleration
+buoyancy_engine_fluid_mass = 2.0 * required_maximum_buoyancy / gravitational_acceleration
 buoyancy_engine_fluid_volume = buoyancy_engine_fluid_mass / WATER_DENSITY_AT_SEA_LEVEL
 buoyancy_engine_reservoir_volume = (1e6 * buoyancy_engine_fluid_volume) + ADDITIONAL_BUOYANCY_FLUID_FOR_RAISED_ATTACHMENTS
 buoyancy_engine_flow_rate = 1e-9 * buoyancy_engine_fluid_displacement * buoyancy_engine_rpm / 60.0
@@ -404,7 +404,8 @@ foam3_x_right = foam3_x_left + foam3_length
 vessel4_x_left = foam3_x_right
 vessel4_x_right = vessel4_x_left + pressure_vessel_outer_diameter
 vehicle_inner_length = vessel4_x_right
-vehicle_length_external_equation = sympy.Eq(vehicle_length_external, (2 * vehicle_fairing_thickness.subs(concrete_parameters)) + vehicle_inner_length)
+vehicle_length_external_equation = sympy.Eq(vehicle_length_external.subs(concrete_parameters),
+                                            (2 * vehicle_fairing_thickness.subs(concrete_parameters)) + vehicle_inner_length)
 
 
 # FORWARD CALCULATION RESULTS -----------------------------------------------------------------------------------------
@@ -416,7 +417,7 @@ pressure_vessel_displacement = pressure_vessel_outer_volume * WATER_DENSITY_AT_S
 vehicle_fairing_dry_mass = vehicle_fairing_dry_mass.subs(concrete_parameters).evalf()
 vehicle_fairing_displacement = vehicle_fairing_displacement.subs(concrete_parameters).evalf()
 vehicle_inner_diameter = vehicle_inner_diameter.subs(concrete_parameters).evalf()
-maximum_buoyancy_required = maximum_buoyancy_required.subs(concrete_parameters).evalf()
+required_maximum_buoyancy = required_maximum_buoyancy.subs(concrete_parameters).evalf()
 battery_capacity_required = battery_capacity_required.subs(concrete_parameters).evalf()
 surveying_buoyancy_percent_of_weight = surveying_buoyancy_percent_of_weight.subs(concrete_parameters).evalf()
 wing_root_chord = wing_root_chord.subs(concrete_parameters).evalf()
@@ -427,7 +428,7 @@ print('\nForward calculation constants:\n')
 print('   vehicle_fairing_dry_mass =', vehicle_fairing_dry_mass)
 print('   vehicle_fairing_displacement =', vehicle_fairing_displacement)
 print('   vehicle_inner_diameter =', vehicle_inner_diameter)
-print('   maximum_buoyancy_required =', maximum_buoyancy_required)
+print('   required_maximum_buoyancy =', required_maximum_buoyancy)
 print('   battery_capacity_required =', battery_capacity_required)
 print('   wing_root_chord =', wing_root_chord)
 print('   wing_dry_mass =', wing_dry_mass)
@@ -440,9 +441,6 @@ print("   pressure_vessel_thickness:", pressure_vessel_thickness_sphere)
 print("   pressure_vessel_inner_volume:", pressure_vessel_inner_volume)
 print("   pressure_vessel_dry_mass:", pressure_vessel_dry_mass)
 print("   pressure_vessel_displacement:", pressure_vessel_displacement)
-
-#if pressure_vessel_inner_volume * WATER_DENSITY_AT_SEA_LEVEL / 2 < maximum_buoyancy_required / GRAVITATIONAL_CONSTANT:
-#    print("not enough buoyancy force")
 
 
 # MASS, VOLUME, AND CENTER CALCULATIONS -------------------------------------------------------------------------------
@@ -542,8 +540,8 @@ antenna_z_center = pressure_vessel_outer_diameter / 2 + vehicle_hull_thickness +
 child_vehicle_displacement = child_vehicle_dry_mass
 child_vehicle_x_center = vehicle_inner_length * sympy.Symbol("child_vehicle_x_relpos")
 child_vehicle_x_left = child_vehicle_x_center - child_vehicle_length / 2
-child_vehicle_z_center = -pressure_vessel_outer_diameter / 2 - movable_pitch_diameter \
-    - vehicle_hull_thickness - child_vehicle_diameter / 2
+child_vehicle_z_center = -pressure_vessel_outer_diameter / 2 - movable_pitch_diameter - vehicle_hull_thickness - child_vehicle_diameter / 2
+
 
 def get_center_of_gravity(bladder: str, pitch: str, roll: str, antenna: str, children: int) \
         -> Tuple[sympy.Expr, sympy.Expr, sympy.Expr, sympy.Expr]:
@@ -757,45 +755,43 @@ battery1_packing_equation = battery1_packing_volume <= pressure_vessel_inner_vol
 battery2_packing_equation = battery2_packing_volume <= pressure_vessel_inner_volume
 battery_capacity_equation = battery1_capacity + battery2_capacity >= battery_capacity_required
 
-pitch_minimum_cbmg_buoyancy, pitch_minimum_cbmg_x, pitch_minimum_cbmg_y, pitch_minimum_cbmg_z = \
-    get_buoyancy_minus_gravity(bladder="empty", pitch="forward", roll="center", antenna="on", children=1)
-pitch_minimum_equation1_stage1 = -pitch_minimum_cbmg_x / pitch_minimum_cbmg_z <= math.tan(-60 * math.pi / 180)
-pitch_minimum_equation2_stage1 = pitch_minimum_cbmg_buoyancy <= \
-    -maximum_buoyancy_required / GRAVITATIONAL_CONSTANT  # sinks to bottom
+pitch_minimum_cbmg_buoyancy_stage1, pitch_minimum_cbmg_x_stage1, pitch_minimum_cbmg_y_stage1, pitch_minimum_cbmg_z_stage1 = \
+   get_buoyancy_minus_gravity(bladder="empty", pitch="forward", roll="center", antenna="on", children=1)
+pitch_minimum_equation1_stage1 = -pitch_minimum_cbmg_x_stage1 / pitch_minimum_cbmg_z_stage1 <= math.tan(-60 * math.pi / 180)
+pitch_minimum_equation2_stage1 = pitch_minimum_cbmg_buoyancy_stage1 <= -required_maximum_buoyancy / GRAVITATIONAL_CONSTANT  # sinks to bottom
 
-pitch_minimum_cbmg_buoyancy, pitch_minimum_cbmg_x, pitch_minimum_cbmg_y, pitch_minimum_cbmg_z = \
-    get_buoyancy_minus_gravity(bladder="empty", pitch="forward", roll="center", antenna="off", children=0)
-pitch_minimum_equation1_stage2 = -pitch_minimum_cbmg_x / pitch_minimum_cbmg_z <= math.tan(-60 * math.pi / 180)
-pitch_minimum_equation2_stage2 = pitch_minimum_cbmg_buoyancy <= \
-    -maximum_buoyancy_required / GRAVITATIONAL_CONSTANT  # sinks to bottom
+pitch_minimum_cbmg_buoyancy_stage2, pitch_minimum_cbmg_x_stage2, pitch_minimum_cbmg_y_stage2, pitch_minimum_cbmg_z_stage2 = \
+   get_buoyancy_minus_gravity(bladder="empty", pitch="forward", roll="center", antenna="off", children=0)
+pitch_minimum_equation1_stage2 = -pitch_minimum_cbmg_x_stage2 / pitch_minimum_cbmg_z_stage2 <= math.tan(-60 * math.pi / 180)
+pitch_minimum_equation2_stage2 = pitch_minimum_cbmg_buoyancy_stage2 <= -required_maximum_buoyancy / GRAVITATIONAL_CONSTANT  # sinks to bottom
 
-pitch_maximum_cbmg_buoyancy, pitch_maximum_cbmg_x, pitch_maximum_cbmg_y, pitch_maximum_cbmg_z = \
-    get_buoyancy_minus_gravity(bladder="full", pitch="aft", roll="center", antenna="on", children=1)
-pitch_maximum_equation1_stage1 = -pitch_maximum_cbmg_x / pitch_maximum_cbmg_z >= math.tan(60 * math.pi / 180)
+pitch_maximum_cbmg_buoyancy_stage1, pitch_maximum_cbmg_x_stage1, pitch_maximum_cbmg_y_stage1, pitch_maximum_cbmg_z_stage1 = \
+   get_buoyancy_minus_gravity(bladder="full", pitch="aft", roll="center", antenna="on", children=1)
+pitch_maximum_equation1_stage1 = -pitch_maximum_cbmg_x_stage1 / pitch_maximum_cbmg_z_stage1 >= math.tan(60 * math.pi / 180)
 
-pitch_maximum_cbmg_buoyancy, pitch_maximum_cbmg_x, pitch_maximum_cbmg_y, pitch_maximum_cbmg_z = \
-    get_buoyancy_minus_gravity(bladder="full", pitch="aft", roll="center", antenna="off", children=0)
-pitch_maximum_equation1_stage2 = -pitch_maximum_cbmg_x / pitch_maximum_cbmg_z >= math.tan(60 * math.pi / 180)
+pitch_maximum_cbmg_buoyancy_stage2, pitch_maximum_cbmg_x_stage2, pitch_maximum_cbmg_y_stage2, pitch_maximum_cbmg_z_stage2 = \
+   get_buoyancy_minus_gravity(bladder="full", pitch="aft", roll="center", antenna="off", children=0)
+pitch_maximum_equation1_stage2 = -pitch_maximum_cbmg_x_stage2 / pitch_maximum_cbmg_z_stage2 >= math.tan(60 * math.pi / 180)
 
-pitch_neutral_cbmg_buoyancy, pitch_neutral_cbmg_x, pitch_neutral_cbmg_y, pitch_neutral_cbmg_z = \
-    get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="center", antenna="on", children=1)
-pitch_neutral_equation1_stage1 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(allowable_pitch_error_at_neutral * math.pi / 180)
-pitch_neutral_equation2_stage1 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-allowable_pitch_error_at_neutral * math.pi / 180)
-pitch_neutral_equation3_stage1 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
+pitch_neutral_cbmg_buoyancy_stage1, pitch_neutral_cbmg_x_stage1, pitch_neutral_cbmg_y_stage1, pitch_neutral_cbmg_z_stage1 = \
+   get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="center", antenna="on", children=1)
+pitch_neutral_equation1_stage1 = -pitch_neutral_cbmg_x_stage1 / pitch_neutral_cbmg_z_stage1 <= math.tan(allowable_pitch_error_at_neutral * math.pi / 180)
+pitch_neutral_equation2_stage1 = -pitch_neutral_cbmg_x_stage1 / pitch_neutral_cbmg_z_stage1 >= math.tan(-allowable_pitch_error_at_neutral * math.pi / 180)
+pitch_neutral_equation3_stage1 = sympy.Abs(pitch_neutral_cbmg_buoyancy_stage1 - 0.25) <= 0.5  # TODO: more magic
 
-pitch_neutral_cbmg_buoyancy, pitch_neutral_cbmg_x, pitch_neutral_cbmg_y, pitch_neutral_cbmg_z = \
-    get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="center", antenna="off", children=0)
-pitch_neutral_equation1_stage2 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z <= math.tan(allowable_pitch_error_at_neutral * math.pi / 180)
-pitch_neutral_equation2_stage2 = -pitch_neutral_cbmg_x / pitch_neutral_cbmg_z >= math.tan(-allowable_pitch_error_at_neutral * math.pi / 180)
-pitch_neutral_equation3_stage2 = sympy.Abs(pitch_neutral_cbmg_buoyancy - 0.25) <= 0.5  # TODO: more magic
+pitch_neutral_cbmg_buoyancy_stage2, pitch_neutral_cbmg_x_stage2, pitch_neutral_cbmg_y_stage2, pitch_neutral_cbmg_z_stage2 = \
+   get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="center", antenna="off", children=0)
+pitch_neutral_equation1_stage2 = -pitch_neutral_cbmg_x_stage2 / pitch_neutral_cbmg_z_stage2 <= math.tan(allowable_pitch_error_at_neutral * math.pi / 180)
+pitch_neutral_equation2_stage2 = -pitch_neutral_cbmg_x_stage2 / pitch_neutral_cbmg_z_stage2 >= math.tan(-allowable_pitch_error_at_neutral * math.pi / 180)
+pitch_neutral_equation3_stage2 = sympy.Abs(pitch_neutral_cbmg_buoyancy_stage2 - 0.25) <= 0.5  # TODO: more magic
 
-roll_minimum_cbmg_buoyancy, roll_minimum_cbmg_x, roll_minimum_cbmg_y, roll_minimum_cbmg_z = \
-    get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port", antenna="on", children=1)
-roll_minimum_equation1_stage1 = -roll_minimum_cbmg_y / roll_minimum_cbmg_z <= math.tan(-20 * math.pi / 180)
+roll_minimum_cbmg_buoyancy_stage1, roll_minimum_cbmg_x_stage1, roll_minimum_cbmg_y_stage1, roll_minimum_cbmg_z_stage1 = \
+   get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port", antenna="on", children=1)
+roll_minimum_equation1_stage1 = -roll_minimum_cbmg_y_stage1 / roll_minimum_cbmg_z_stage1 <= math.tan(-20 * math.pi / 180)
 
-roll_minimum_cbmg_buoyancy, roll_minimum_cbmg_x, roll_minimum_cbmg_y, roll_minimum_cbmg_z = \
-    get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port", antenna="off", children=0)
-roll_minimum_equation1_stage2 = -roll_minimum_cbmg_y / roll_minimum_cbmg_z <= math.tan(-20 * math.pi / 180)
+roll_minimum_cbmg_buoyancy_stage2, roll_minimum_cbmg_x_stage2, roll_minimum_cbmg_y_stage2, roll_minimum_cbmg_z_stage2 = \
+   get_buoyancy_minus_gravity(bladder="half", pitch="middle", roll="port", antenna="off", children=0)
+roll_minimum_equation1_stage2 = -roll_minimum_cbmg_y_stage2 / roll_minimum_cbmg_z_stage2 <= math.tan(-20 * math.pi / 180)
 
 constraints = PointFunc({
    "vehicle_length_constraint": vehicle_length_external_equation,
@@ -811,29 +807,25 @@ constraints = PointFunc({
    "pitch_neutral_equation1_stage1": pitch_neutral_equation1_stage1,
    "pitch_neutral_equation2_stage1": pitch_neutral_equation2_stage1,
    "pitch_neutral_equation3_stage1": pitch_neutral_equation3_stage1,
-   #"pitch_neutral_equation1_stage2": pitch_neutral_equation1_stage2,
-   #"pitch_neutral_equation2_stage2": pitch_neutral_equation2_stage2,
+   "pitch_neutral_equation1_stage2": pitch_neutral_equation1_stage2,
+   "pitch_neutral_equation2_stage2": pitch_neutral_equation2_stage2,
    #"pitch_neutral_equation3_stage2": pitch_neutral_equation3_stage2,
    "roll_minimum_equation1_stage1": roll_minimum_equation1_stage1,
    "roll_minimum_equation1_stage2": roll_minimum_equation1_stage2,
-   # "finess_ratio_equation": vehicle_inner_length <= 10 * vehicle_inner_diameter,
-   # "roll_dry_mass_equation": movable_roll_dry_mass <= 20,
-   # "vehicle_dry_mass_equation": vehicle_dry_mass_stage1 <= 190,
-   "surveying_buoyancy_force": vehicle_dry_mass_stage2 * surveying_buoyancy_percent_of_weight * GRAVITATIONAL_CONSTANT <= maximum_buoyancy_required,
+   "surveying_buoyancy_force": vehicle_dry_mass_stage2 * surveying_buoyancy_percent_of_weight * GRAVITATIONAL_CONSTANT <= required_maximum_buoyancy,
 })
 
 print("\nConstraint variables:", constraints.input_names)
 print("\nConstraint equations:", list(constraints.output_names))
-#print("\nConstraint dictionary:", constraints.exprs)
 
 derived_values = PointFunc({
-   "pitch_minimum_buoyancy": pitch_minimum_cbmg_buoyancy,
-   "pitch_minimum_angle": atan(-pitch_minimum_cbmg_x / pitch_minimum_cbmg_z) * 180 / math.pi,
-   "pitch_neutral_buoyancy": pitch_neutral_cbmg_buoyancy,
-   "pitch_neutral_angle": atan(-pitch_neutral_cbmg_x / pitch_neutral_cbmg_z) * 180 / math.pi,
-   "pitch_maximum_buoyancy": pitch_maximum_cbmg_buoyancy,
-   "pitch_maximum_angle": atan(-pitch_maximum_cbmg_x / pitch_maximum_cbmg_z) * 180 / math.pi,
-   "roll_minimum_angle": atan(-roll_minimum_cbmg_y / roll_minimum_cbmg_z) * 180 / math.pi,
+   "pitch_minimum_buoyancy": pitch_minimum_cbmg_buoyancy_stage1,
+   "pitch_minimum_angle": atan(-pitch_minimum_cbmg_x_stage1 / pitch_minimum_cbmg_z_stage1) * 180 / math.pi,
+   "pitch_neutral_buoyancy": pitch_neutral_cbmg_buoyancy_stage1,
+   "pitch_neutral_angle": atan(-pitch_neutral_cbmg_x_stage1 / pitch_neutral_cbmg_z_stage1) * 180 / math.pi,
+   "pitch_maximum_buoyancy": pitch_maximum_cbmg_buoyancy_stage1,
+   "pitch_maximum_angle": atan(-pitch_maximum_cbmg_x_stage1 / pitch_maximum_cbmg_z_stage1) * 180 / math.pi,
+   "roll_minimum_angle": atan(-roll_minimum_cbmg_y_stage1 / roll_minimum_cbmg_z_stage1) * 180 / math.pi,
    "foam1_x_center": foam1_x_center,
    "foam1_z_center": foam1_z_center,
    "foam1_volume": foam1_volume,
@@ -938,7 +930,7 @@ print()
 assert list(bounds.keys()) == list(constraints.input_names)
 
 # generate random points
-points = PointCloud.generate(bounds, 5000)
+points = PointCloud.generate(bounds, 50000)
 
 # minimize errors with newton raphson
 points = points.newton_raphson(constraints, bounds)
@@ -958,8 +950,8 @@ target_func = PointFunc({
     "vehicle_dry_mass_stage2": vehicle_dry_mass_stage2,
     "vehicle_inner_length": vehicle_inner_length,
     "wing_x_center": wing_x_center,
-    "pitch_minimum_angle": atan(-pitch_minimum_cbmg_x / pitch_minimum_cbmg_z) * 180 / math.pi,
-    "roll_minimum_angle": atan(-roll_minimum_cbmg_y / roll_minimum_cbmg_z) * 180 / math.pi,
+    "pitch_minimum_angle": atan(-pitch_minimum_cbmg_x_stage1 / pitch_minimum_cbmg_z_stage1) * 180 / math.pi,
+    "roll_minimum_angle": atan(-roll_minimum_cbmg_y_stage1 / roll_minimum_cbmg_z_stage1) * 180 / math.pi,
     "battery1_capacity": battery1_capacity,
     "foam1_length": foam1_length,
 })
