@@ -64,14 +64,12 @@ def run():
     for step in range(50):
         points.add_mutations(0.1, num)
 
+        # this is where the calculated columns are removed
         points = points.newton_raphson(constraints, bounds, num_iter=10)
-        # points.print_info()
 
         points = points.prune_by_tolerances(constraints(points), 0.01)
-        # points.print_info()
 
         points = points.extend(derived(points))
-        # points.print_info()
 
         directions = [0.0] * points.num_float_vars
         directions[points.float_vars.index("area")] = -1.0

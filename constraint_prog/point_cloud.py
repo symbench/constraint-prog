@@ -562,6 +562,8 @@ class PointCloud:
         The number of points in the two cloud must match.
         """
         assert self.num_points == other.num_points
+        assert set(self.float_vars).isdisjoint(set(other.float_vars))
+        assert set(self.string_vars).isdisjoint(set(other.string_vars))
         float_vars = list(self.float_vars) + other.float_vars
         float_data = torch.cat((self.float_data, other.float_data), dim=1)
         string_vars = list(self.string_vars) + other.string_vars
