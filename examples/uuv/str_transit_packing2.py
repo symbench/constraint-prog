@@ -50,7 +50,6 @@ concrete_parameters = {
    'vehicle_fairing_material_density': 1522.4,
    'vehicle_nose_length': 0.3556,
    'vehicle_tail_length': 0.5110,
-   'vehicle_depth_rating': 3000.0,
    'payload_power_draw': 0.0,
    'hotel_power_draw_in_transit': 1.0,
    'hotel_power_draw_surveying': 2.0,
@@ -112,7 +111,6 @@ vehicle_fairing_thickness = sympy.Symbol('vehicle_fairing_thickness')  # m
 vehicle_fairing_material_density = sympy.Symbol('vehicle_fairing_material_density')  # kg/m^3
 vehicle_nose_length = sympy.Symbol('vehicle_nose_length')  # m
 vehicle_tail_length = sympy.Symbol('vehicle_tail_length')  # m
-vehicle_depth_rating = sympy.Symbol('vehicle_depth_rating')  # m
 payload_power_draw = sympy.Symbol('payload_power_draw')  # W
 payload_weight_in_air = sympy.Symbol('payload_weight_in_air')  # kg
 payload_displaced_volume = sympy.Symbol('payload_displaced_volume')  # m^3
@@ -173,7 +171,7 @@ wing_coefficient_of_lift = sympy.Symbol('wing_coefficient_of_lift')
 
 gravitational_acceleration = 9.780318 * (1.0 + (5.2788e-3 + 2.36e-5 * sin(mpmath.radians(mission_latitude))**2) * \
    sin(mpmath.radians(mission_latitude))**2)  # m/s^2
-pressure_at_maximum_depth = 10000 * (2.398599584e05 - sqrt(5.753279964e10 - (4.833657881e05 * vehicle_depth_rating)))
+pressure_at_maximum_depth = 10000 * (2.398599584e05 - sqrt(5.753279964e10 - (4.833657881e05 * mission_maximum_depth)))
 crush_pressure_at_maximum_depth = pressure_at_maximum_depth * DEPTH_RATING_SAFETY_FACTOR
 water_density_at_maximum_depth = 1000 + ((((((((((((5.2787e-8 * mission_minimum_water_temperature) - 6.12293e-6) * \
    mission_minimum_water_temperature) + 8.50935e-5) + ((((9.1697e-10 * mission_minimum_water_temperature) + \
@@ -302,8 +300,8 @@ cylindrical_battery_pack_required_length = packed_battery_pack_volume / (pow(0.5
 
 # WING EXPRESSIONS ----------------------------------------------------------------------------------------------------
 
-syntactic_foam_density = sympy.Piecewise((320.0, vehicle_depth_rating <= 500.0), (350.0, vehicle_depth_rating <= 1000.0), (385.0, vehicle_depth_rating <= 2000.0),
-                                         (416.0, vehicle_depth_rating <= 3000.0), (465.0, vehicle_depth_rating <= 4000.0), (495.0, vehicle_depth_rating <= 5000.0),
+syntactic_foam_density = sympy.Piecewise((320.0, mission_maximum_depth <= 500.0), (350.0, mission_maximum_depth <= 1000.0), (385.0, mission_maximum_depth <= 2000.0),
+                                         (416.0, mission_maximum_depth <= 3000.0), (465.0, mission_maximum_depth <= 4000.0), (495.0, mission_maximum_depth <= 5000.0),
                                          (545.0, True))
 maximum_lift_drag_ratio = 1.0 / tan(mpmath.radians(minimum_glide_slope))
 minimum_wing_lift = (nominal_form_drag_force + nominal_friction_drag_force) * maximum_lift_drag_ratio
