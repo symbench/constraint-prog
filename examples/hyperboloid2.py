@@ -22,8 +22,14 @@ import torch
 from constraint_prog.point_cloud import PointCloud, PointFunc
 
 
-def main_pareto():
-    dim = 10
+def main_pareto(dim=10):
+    """
+    Find all points in dim dimensions such that the product of the coordinates
+    is larger than one and the sum of the coordinates is at least dim + 1.
+    Then we find the pareto front for the first two coordinates, trying to
+    minimize them.
+    """
+
     num = 1000  # number of simultaneous designs
 
     # create the constraint expressions

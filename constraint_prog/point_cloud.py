@@ -359,7 +359,8 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data[selected.numpy()])
 
-    def prune_close_points2(self, resolutions: Union[Dict[str, float]], keep=1) -> 'PointCloud':
+    def prune_close_points2(self, resolutions: Union[float, Dict[str, float]],
+                            keep=1) -> 'PointCloud':
         if isinstance(resolutions, float):
             resolutions = [resolutions] * self.num_float_vars
         else:
@@ -630,7 +631,7 @@ class PointCloud:
         ax1.set_ylabel(var2)
         plt.show()
 
-    def plot3d(self, var1: str, var2: str, var3: str, point_size: float=5.0):
+    def plot3d(self, var1: str, var2: str, var3: str, point_size: float = 5.0):
         """
         Plots the 3d projection of the point cloud to the given coordinates.
         """
