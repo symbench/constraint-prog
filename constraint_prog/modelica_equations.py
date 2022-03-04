@@ -58,6 +58,12 @@ class ModelicaSession:
         print("Loading", filename, "library:",
               self.send("loadFile(\"" + filename + "\")"))
 
+    def save_model(self, model: str, filename: str):
+        print("Instantiating model:", model)
+        result = self.send("instantiateModel(" + model + ")")
+        with open(filename, "w") as f:
+            f.write(result)
+
     def instantiate_model(self, model: str) -> 'Model':
         print("Instantiating model:", model)
         result = self.send("instantiateModel(" + model + ")")
@@ -171,8 +177,9 @@ class Model:
 def run():
     session = ModelicaSession()
     session.load_library()
-    model = session.instantiate_model("Symbench.FDM.Test")
-    model.print()
+    session.save_model('Symbench.FDM.Test', 'test.mo')
+    # model = session.instantiate_model("Symbench.FDM.Test")
+    # model.print()
 
 
 if __name__ == '__main__':
