@@ -16,12 +16,14 @@
 
 import os
 import re
+from pyrsistent import inc
 import sympy
 import tempfile
 from typing import Any, Optional, Set
 
 import pyparsing as pp
 from OMPython import OMCSessionZMQ
+from torch import exp
 
 # https://build.openmodelica.org/Documentation/ModelicaReference.ModelicaGrammar.html
 # https://pyparsing-docs.readthedocs.io/en/latest/HowToUsePyparsing.html
@@ -67,60 +69,51 @@ ELEMENT = pp.Group(COMPONENT_CLAUSE)
 
 ELEMENT_LIST = pp.ZeroOrMore(ELEMENT + pp.Suppress(";")).setResultsName("element_list")
 
-CLASS_PREFIXES = pp.Keyword("class") | pp.Keyword("function")
+EXTERNAL_SECTION = pp.Group(
+    pp.Keyword("external") + pp.dblQuotedString("language_sepcification")
+    + NAME + "=" + IDENTIFIER + "(" + pp.Optional(pp.delimitedList(EXPRESSION)) + ")" + ";"
+)
+
+NONPARSED_LINE = pp.Combine(
+    pp.NotAny(pp.Keyword("end") + pp.FollowedBy(NAME)) + pp.SkipTo(";", include=True)
+)
+
+EQUATION_SECTION = pp.Group(
+    pp.Optional(pp.Keyword("initial")) + pp.Keyword("equations") +
+    pp.ZeroOrMore(NONPARSED_LINE)
+)
+
+COMPOSITION = ELEMENT_LIST + pp.Optional(EXTERNAL_SECTION)
 
 CLASS_DEFINITION = pp.Group(
-    CLASS_PREFIXES + NAME + pp.Optional(STRING_COMMENT)
-    + ELEMENT_LIST
-    + pp.Keyword("end") + NAME("end_name"))
+    pp.Keyword("class") + NAME + pp.Optional(STRING_COMMENT)
+    + COMPOSITION
+    + pp.Keyword("end") + NAME("end_name")
+)
 
-STORED_DEFINITION = pp.ZeroOrMore(CLASS_DEFINITION + pp.Suppress(";"))
+FUNCTION_DEFINITION = pp.Group(
+    pp.Optional(pp.Keyword("impure")) + pp.Keyword("function") + NAME
+    + pp.Optional(STRING_COMMENT) + pp.ZeroOrMore(NONPARSED_LINE)
+    + pp.Keyword("end") + NAME("end_name")
+)
+
+STORED_DEFINITION = pp.ZeroOrMore((FUNCTION_DEFINITION | CLASS_DEFINITION) + pp.Suppress(";"))
+
+
+def run2():
+    with open('test.mo', 'r') as f:
+        data = STORED_DEFINITION.parseString(f.read())
+        print(data)
 
 
 def run3():
-    print(NAME.parseString("Hihi3.Hehe.A3", parseAll=True))
-    data = ELEMENT_MODIFICATION.parseString("Haha.Hehe = Hihi3 \"something\"", parseAll=True)
-    print(data.modification, data.comment)
-    data = "(a=b \"haha\", c(x=y)=d \"hehe\")=f"
-    data = MODIFICATION.parseString(data, parseAll=True)
-    print(data)
-    print(len(data.arguments))
-    print(data.arguments[0].comment)
-    print(data.expression)
-    print(data.arguments[1].arguments)
-
-    data = ELEMENT.parseString("input Modelica.Blocks.Types.ExternalCombiTable2D tableID ;")
-    print(data)
-
     data = """
 function Modelica.Blocks.Tables.Internal.getDerTable2DValue "Derivative of interpolated 2-dim. table defined by matrix"
   input Modelica.Blocks.Types.ExternalCombiTable2D tableID;
-  input Real u1;
-  input Real u2;
-  input Real der_u1;
-  input Real der_u2;
-  output Real der_y;
 end Modelica.Blocks.Tables.Internal.getDerTable2DValue;
-
-class Symbench.FDM.Test
-  parameter Real body_rotation.phi0(quantity = "Angle", unit = "rad", displayUnit = "deg") = 0.0 "Fixed offset angle of housing";
-  Real body_rotation.flange.phi(quantity = "Angle", unit = "rad", displayUnit = "deg") "Absolute rotation angle of flange";
-  Real body_rotation.flange.tau(quantity = "Torque", unit = "N.m") "Cut torque in the flange";
-  Real eletric_ground.p.v(quantity = "ElectricPotential", unit = "V") "Potential at the pin";
-  Real eletric_ground.p.i(quantity = "ElectricCurrent", unit = "A") "Current flowing into the pin";
-  parameter Real air_rotation.phi0(quantity = "Angle", unit = "rad", displayUnit = "deg") = 0.0 "Fixed offset angle of housing";
-end Symbench.FDM.Test;
-"""
-    data = STORED_DEFINITION.parseString(data, parseAll=False)
+    """
+    data = STORED_DEFINITION.parseString(data)
     print(data)
-    print(len(data))
-    print(data[0])
-    print(len(data[0]))
-    print(data[1].name)
-    print(data[1].end_name)
-    print(data[1].comment)
-    print(data[1].element_list)
-    print(len(data[1].element_list))
 
 
 class ModelicaSession:
@@ -274,4 +267,5 @@ def run():
 
 if __name__ == '__main__':
     # run()
+    # run2()
     run3()
