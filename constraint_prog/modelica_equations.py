@@ -25,12 +25,148 @@ import pypeg2
 from OMPython import OMCSessionZMQ
 
 
-class Name(str):
-    gramar = re.compile('[a-zA-Z-\.]*')
+class Ident(str):
+    grammar = re.compile('[a-zA-Z_][a-zA-Z_0-9]*')
+
+
+class Name(pypeg2.List):
+    grammar = pypeg2.contiguous(Ident, pypeg2.maybe_some(".", Ident))
+
+    def value(self):
+        return '.'.join(self)
+
+
+class String(str):
+    grammar = '"', re.compile('[^"]*'), '"'
+
+
+class StringComment(list):
+    grammar = String, pypeg2.maybe_some("+", String)
+
+
+class UnparsedLines(pypeg2.List):
+    grammar = pypeg2.maybe_some(re.compile('(\w*|(input|output|external|parameter|Real) [^\n]*)\n'))
+
+
+class Function(pypeg2.List):
+    grammar = "function", pypeg2.blank, Name, StringComment, pypeg2.endl, \
+        UnparsedLines, "end", pypeg2.blank, Name, ";", pypeg2.endl, pypeg2.endl
+
+
+class Modification:
+    grammar = None
+
+    def __repr__(self):
+        return "hihi"
+
+
+class ElementModification:
+    grammar = (
+        pypeg2.attr('name', Name),
+        pypeg2.attr('modification', Modification),
+        #        pypeg2.attr('comment', pypeg2.optional(StringComment)),
+    )
+
+
+class ClassModification(pypeg2.List):
+    grammar = "(", pypeg2.csl([ElementModification]), ")"
+
+
+Modification.grammar = (
+    pypeg2.attr('arguments', pypeg2.optional(ClassModification)),
+    pypeg2.attr('expression', pypeg2.optional("=", Name)),
+)
+
+
+class TypePrefix1(pypeg2.Keyword):
+    grammar = pypeg2.Enum(
+        pypeg2.Keyword("flow"),
+        pypeg2.Keyword("stream"),
+    )
+
+
+class TypePrefix2(pypeg2.Keyword):
+    grammar = pypeg2.Enum(
+        pypeg2.Keyword("discrete"),
+        pypeg2.Keyword("parameter"),
+        pypeg2.Keyword("constant"),
+    )
+
+
+class TypePrefix3(pypeg2.Keyword):
+    grammar = pypeg2.Enum(
+        pypeg2.Keyword("input"),
+        pypeg2.Keyword("output"),
+    )
+
+
+class ComponentDeclaration():
+    grammar = (
+        pypeg2.attr('ident', Ident),
+        pypeg2.attr('modification', pypeg2.optional(Modification)),
+        pypeg2.attr('comment', pypeg2.optional(StringComment)),
+    )
+
+
+class ComponentClause(pypeg2.List):
+    grammar = (
+        pypeg2.attr('prefix1', pypeg2.optional(TypePrefix1)),
+        pypeg2.attr('prefix2', pypeg2.optional(TypePrefix2)),
+        pypeg2.attr('prefix3', pypeg2.optional(TypePrefix3)),
+        pypeg2.attr('type', Name), pypeg2.blank,
+        pypeg2.csl(ComponentDeclaration),
+        pypeg2.attr('comment', pypeg2.optional(StringComment)),
+    )
+
+
+class Class(pypeg2.List):
+    grammar = (
+        "class", pypeg2.blank, Name, pypeg2.attr(
+            'comment', pypeg2.optional(StringComment)), pypeg2.endl,
+        UnparsedLines,
+        "end", pypeg2.blank, Name, ";", pypeg2.endl, pypeg2.endl
+    )
+
+
+class Document(pypeg2.List):
+    grammar = pypeg2.maybe_some([Function, Class])
+
 
 def run2():
-    value = pypeg2.parse("Hello", Name)
+    # with open('test.mo', 'r') as f:
+    #     result = f.read()
+    #     print(result)
+    # return
+    input = 'body_rotation(a=b)'
+    parsed = pypeg2.parse(input, ElementModification)
+    print(parsed)
+    print(parsed.modification)
+    print(pypeg2.compose(parsed))
+    return
+
+    value = pypeg2.parse("""
+function Modelica.Blocks.Tables.Internal.getDerTable2DValue "Derivative of interpolated 2-dim. table defined by matrix"
+  input Modelica.Blocks.Types.ExternalCombiTable2D tableID;
+  input Real u1;
+  input Real u2;
+  input Real der_u1;
+  input Real der_u2;
+  output Real der_y;
+
+  external "C" der_y = ModelicaStandardTables_CombiTable2D_getDerValue(tableID, u1, u2, der_u1, der_u2);
+end Modelica.Blocks.Tables.Internal.getDerTable2DValue;
+
+class Symbench.FDM.Test
+  parameter Real body_rotation.phi0(quantity = "Angle", unit = "rad", displayUnit = "deg") = 0.0 "Fixed offset angle of housing";
+  Real body_rotation.flange.phi(quantity = "Angle", unit = "rad", displayUnit = "deg") "Absolute rotation angle of flange";
+  Real body_rotation.flange.tau(quantity = "Torque", unit = "N.m") "Cut torque in the flange";
+  Real eletric_ground.p.v(quantity = "ElectricPotential", unit = "V") "Potential at the pin";
+  Real eletric_ground.p.i(quantity = "ElectricCurrent", unit = "A") "Current flowing into the pin";
+  parameter Real air_rotation.phi0(quantity = "Angle", unit = "rad", displayUnit = "deg") = 0.0 "Fixed offset angle of housing";
+end Symbench.FDM.Test;
+    """, Document)
     print(value)
+    print(pypeg2.compose(value, autoblank=True))
 
 
 class ModelicaSession:
@@ -183,5 +319,5 @@ def run():
 
 
 if __name__ == '__main__':
-    run()
-    # run2()
+    # run()
+    run2()
