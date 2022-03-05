@@ -14,137 +14,85 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Any, Optional, Set
-
 import os
 import re
 import sympy
 import tempfile
+from typing import Any, Optional, Set
 
-import pypeg2
+import pyparsing as pp
 from OMPython import OMCSessionZMQ
 
+# https://build.openmodelica.org/Documentation/ModelicaReference.ModelicaGrammar.html
+# https://pyparsing-docs.readthedocs.io/en/latest/HowToUsePyparsing.html
 
-class Ident(str):
-    grammar = re.compile('[a-zA-Z_][a-zA-Z_0-9]*')
+IDENTIFIER = pp.NotAny(pp.Keyword("end") | pp.Keyword("parameter")) \
+    + pp.Word(pp.alphas, pp.alphanums + "_").setName("identifier")
 
+NAME = pp.delimitedList(IDENTIFIER, delim=".", combine=True).setResultsName("name")
 
-class Name(pypeg2.List):
-    grammar = pypeg2.contiguous(Ident, pypeg2.maybe_some(".", Ident))
+STRING_COMMENT = pp.QuotedString('"', '\\').setResultsName("comment")
 
-    def value(self):
-        return '.'.join(self)
+MODIFICATION = pp.Forward().setResultsName("modification")
 
+ELEMENT_MODIFICATION = NAME + pp.Optional(MODIFICATION) + pp.Optional(STRING_COMMENT)
 
-class String(str):
-    grammar = '"', re.compile('[^"]*'), '"'
+ARGUMENT = pp.Group(ELEMENT_MODIFICATION)
 
+CLASS_MODIFICATION = pp.Group(
+    pp.Suppress("(") +
+    pp.Optional(pp.delimitedList(ARGUMENT)) +
+    pp.Suppress(")")).setResultsName("arguments")
 
-class StringComment(list):
-    grammar = String, pypeg2.maybe_some("+", String)
+EXPRESSION = (pp.dblQuotedString | NAME | pp.pyparsing_common.real).setResultsName("expression")
 
+MODIFICATION <<= CLASS_MODIFICATION + pp.Optional('=' + EXPRESSION) | '=' + EXPRESSION
 
-class UnparsedLines(pypeg2.List):
-    grammar = pypeg2.maybe_some(re.compile('(\w*|(input|output|external|parameter|Real) [^\n]*)\n'))
+DECLARATION = NAME + pp.Optional(MODIFICATION)
 
+TYPE_PREFIX = (
+    pp.Optional(pp.Keyword("flow") | pp.Keyword("stream"))
+    + pp.Optional(pp.Keyword("discrete") | pp.Keyword("parameter") | pp.Keyword("constant"))
+    + pp.Optional(pp.Keyword("input") | pp.Keyword("output"))
+).setResultsName("type_prefix")
 
-class Function(pypeg2.List):
-    grammar = "function", pypeg2.blank, Name, StringComment, pypeg2.endl, \
-        UnparsedLines, "end", pypeg2.blank, Name, ";", pypeg2.endl, pypeg2.endl
+TYPE_SPECIFIER = NAME("type_specifier")
 
+COMPONENT_LIST = pp.delimitedList(
+    DECLARATION + pp.Optional(STRING_COMMENT)).setResultsName("component_list")
 
-class Modification:
-    grammar = None
+COMPONENT_CLAUSE = TYPE_PREFIX + TYPE_SPECIFIER + COMPONENT_LIST
 
-    def __repr__(self):
-        return "hihi"
+ELEMENT = pp.Group(COMPONENT_CLAUSE)
 
+ELEMENT_LIST = pp.ZeroOrMore(ELEMENT + pp.Suppress(";")).setResultsName("element_list")
 
-class ElementModification:
-    grammar = (
-        pypeg2.attr('name', Name),
-        pypeg2.attr('modification', Modification),
-        #        pypeg2.attr('comment', pypeg2.optional(StringComment)),
-    )
+CLASS_PREFIXES = pp.Keyword("class") | pp.Keyword("function")
 
+CLASS_DEFINITION = pp.Group(
+    CLASS_PREFIXES + NAME + pp.Optional(STRING_COMMENT)
+    + ELEMENT_LIST
+    + pp.Keyword("end") + NAME("end_name"))
 
-class ClassModification(pypeg2.List):
-    grammar = "(", pypeg2.csl([ElementModification]), ")"
-
-
-Modification.grammar = (
-    pypeg2.attr('arguments', pypeg2.optional(ClassModification)),
-    pypeg2.attr('expression', pypeg2.optional("=", Name)),
-)
-
-
-class TypePrefix1(pypeg2.Keyword):
-    grammar = pypeg2.Enum(
-        pypeg2.Keyword("flow"),
-        pypeg2.Keyword("stream"),
-    )
+STORED_DEFINITION = pp.ZeroOrMore(CLASS_DEFINITION + pp.Suppress(";"))
 
 
-class TypePrefix2(pypeg2.Keyword):
-    grammar = pypeg2.Enum(
-        pypeg2.Keyword("discrete"),
-        pypeg2.Keyword("parameter"),
-        pypeg2.Keyword("constant"),
-    )
+def run3():
+    print(NAME.parseString("Hihi3.Hehe.A3", parseAll=True))
+    data = ELEMENT_MODIFICATION.parseString("Haha.Hehe = Hihi3 \"something\"", parseAll=True)
+    print(data.modification, data.comment)
+    data = "(a=b \"haha\", c(x=y)=d \"hehe\")=f"
+    data = MODIFICATION.parseString(data, parseAll=True)
+    print(data)
+    print(len(data.arguments))
+    print(data.arguments[0].comment)
+    print(data.expression)
+    print(data.arguments[1].arguments)
 
+    data = ELEMENT.parseString("input Modelica.Blocks.Types.ExternalCombiTable2D tableID ;")
+    print(data)
 
-class TypePrefix3(pypeg2.Keyword):
-    grammar = pypeg2.Enum(
-        pypeg2.Keyword("input"),
-        pypeg2.Keyword("output"),
-    )
-
-
-class ComponentDeclaration():
-    grammar = (
-        pypeg2.attr('ident', Ident),
-        pypeg2.attr('modification', pypeg2.optional(Modification)),
-        pypeg2.attr('comment', pypeg2.optional(StringComment)),
-    )
-
-
-class ComponentClause(pypeg2.List):
-    grammar = (
-        pypeg2.attr('prefix1', pypeg2.optional(TypePrefix1)),
-        pypeg2.attr('prefix2', pypeg2.optional(TypePrefix2)),
-        pypeg2.attr('prefix3', pypeg2.optional(TypePrefix3)),
-        pypeg2.attr('type', Name), pypeg2.blank,
-        pypeg2.csl(ComponentDeclaration),
-        pypeg2.attr('comment', pypeg2.optional(StringComment)),
-    )
-
-
-class Class(pypeg2.List):
-    grammar = (
-        "class", pypeg2.blank, Name, pypeg2.attr(
-            'comment', pypeg2.optional(StringComment)), pypeg2.endl,
-        UnparsedLines,
-        "end", pypeg2.blank, Name, ";", pypeg2.endl, pypeg2.endl
-    )
-
-
-class Document(pypeg2.List):
-    grammar = pypeg2.maybe_some([Function, Class])
-
-
-def run2():
-    # with open('test.mo', 'r') as f:
-    #     result = f.read()
-    #     print(result)
-    # return
-    input = 'body_rotation(a=b)'
-    parsed = pypeg2.parse(input, ElementModification)
-    print(parsed)
-    print(parsed.modification)
-    print(pypeg2.compose(parsed))
-    return
-
-    value = pypeg2.parse("""
+    data = """
 function Modelica.Blocks.Tables.Internal.getDerTable2DValue "Derivative of interpolated 2-dim. table defined by matrix"
   input Modelica.Blocks.Types.ExternalCombiTable2D tableID;
   input Real u1;
@@ -152,8 +100,6 @@ function Modelica.Blocks.Tables.Internal.getDerTable2DValue "Derivative of inter
   input Real der_u1;
   input Real der_u2;
   output Real der_y;
-
-  external "C" der_y = ModelicaStandardTables_CombiTable2D_getDerValue(tableID, u1, u2, der_u1, der_u2);
 end Modelica.Blocks.Tables.Internal.getDerTable2DValue;
 
 class Symbench.FDM.Test
@@ -164,9 +110,17 @@ class Symbench.FDM.Test
   Real eletric_ground.p.i(quantity = "ElectricCurrent", unit = "A") "Current flowing into the pin";
   parameter Real air_rotation.phi0(quantity = "Angle", unit = "rad", displayUnit = "deg") = 0.0 "Fixed offset angle of housing";
 end Symbench.FDM.Test;
-    """, Document)
-    print(value)
-    print(pypeg2.compose(value, autoblank=True))
+"""
+    data = STORED_DEFINITION.parseString(data, parseAll=False)
+    print(data)
+    print(len(data))
+    print(data[0])
+    print(len(data[0]))
+    print(data[1].name)
+    print(data[1].end_name)
+    print(data[1].comment)
+    print(data[1].element_list)
+    print(len(data[1].element_list))
 
 
 class ModelicaSession:
@@ -320,4 +274,4 @@ def run():
 
 if __name__ == '__main__':
     # run()
-    run2()
+    run3()
