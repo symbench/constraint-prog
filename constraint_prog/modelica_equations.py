@@ -16,7 +16,6 @@
 
 import os
 import re
-from pyrsistent import inc
 import sympy
 import tempfile
 from typing import Any, Optional, Set
@@ -25,19 +24,44 @@ import pyparsing as pp
 from OMPython import OMCSessionZMQ
 from torch import exp
 
-# https://build.openmodelica.org/Documentation/ModelicaReference.ModelicaGrammar.html
+# https://doc.modelica.org/Modelica%203.2.3/Resources/helpWSM/ModelicaReference/ModelicaReference.ModelicaGrammar.html
 # https://pyparsing-docs.readthedocs.io/en/latest/HowToUsePyparsing.html
 
-IDENTIFIER = pp.NotAny(pp.Keyword("end") | pp.Keyword("parameter")) \
-    + pp.Word(pp.alphas, pp.alphanums + "_").setName("identifier")
+KEYWORD = pp.Keyword("end") | pp.Keyword("function") | pp.Keyword("class") \
+    | pp.Keyword("model") | pp.Keyword("if") | pp.Keyword("else") \
+    | pp.Keyword("elseif") | pp.Keyword("then") | pp.Keyword("initial") \
+    | pp.Keyword("algorithm") | pp.Keyword("equation") | pp.Keyword("true") \
+    | pp.Keyword("false") | pp.Keyword("not") | pp.Keyword("and") \
+    | pp.Keyword("or") | pp.Keyword("public") | pp.Keyword("protected") \
+    | pp.Keyword("flow") | pp.Keyword("constanr") | pp.Keyword("input") \
+    | pp.Keyword("output") | pp.Keyword("break") | pp.Keyword("return") \
+    | pp.Keyword("partial") | pp.Keyword("final") | pp.Keyword("block") \
+    | pp.Keyword("record") | pp.Keyword("connector") | pp.Keyword("package") \
+    | pp.Keyword("type") | pp.Keyword("enumeration") | pp.Keyword("pure") \
+    | pp.Keyword("impure") | pp.Keyword("operator")
 
-NAME = pp.delimitedList(IDENTIFIER, delim=".", combine=True).setResultsName("name")
+# partial
+IDENT = pp.NotAny(KEYWORD) + \
+    pp.Word(pp.alphas, pp.alphanums + "_").setName("identifier")
 
-STRING_COMMENT = pp.QuotedString('"', '\\').setResultsName("comment")
+# complete
+NAME = pp.delimitedList(IDENT, delim=".", combine=True).setResultsName("name")
+
+# partial
+STRING_COMMENT = pp.Optional(pp.QuotedString(
+    '"', '\\')).setResultsName("comment")
+
+# new
+MULTIPLE_STRING_COMMENT = pp.ZeroOrMore(
+    pp.QuotedString('"', '\\')).setResultsName("comment")
+
+# partial
+COMMENT = STRING_COMMENT
 
 MODIFICATION = pp.Forward().setResultsName("modification")
 
-ELEMENT_MODIFICATION = NAME + pp.Optional(MODIFICATION) + pp.Optional(STRING_COMMENT)
+ELEMENT_MODIFICATION = NAME + \
+    pp.Optional(MODIFICATION) + pp.Optional(STRING_COMMENT)
 
 ARGUMENT = pp.Group(ELEMENT_MODIFICATION)
 
@@ -46,58 +70,203 @@ CLASS_MODIFICATION = pp.Group(
     pp.Optional(pp.delimitedList(ARGUMENT)) +
     pp.Suppress(")")).setResultsName("arguments")
 
-EXPRESSION = (pp.dblQuotedString | NAME | pp.pyparsing_common.real).setResultsName("expression")
+# partial
+COMPONENT_REFERENCE = NAME
 
-MODIFICATION <<= CLASS_MODIFICATION + pp.Optional('=' + EXPRESSION) | '=' + EXPRESSION
+# forward
+EXPRESSION = pp.Forward()
+
+# partial and modified
+FUNCTION_ARGUMENTS = pp.delimitedList(EXPRESSION)
+
+# complete
+FUNCTION_CALL_ARGS = "(" + pp.Optional(FUNCTION_ARGUMENTS) + ")"
+
+# complete
+OUTPUT_EXPRESSION_LIST = pp.delimitedList(EXPRESSION)
+
+# partial
+PRIMARY = pp.dblQuotedString() \
+    | pp.pyparsing_common.number \
+    | pp.Keyword("true") \
+    | pp.Keyword("false") \
+    | (COMPONENT_REFERENCE + FUNCTION_CALL_ARGS) \
+    | COMPONENT_REFERENCE \
+    | "(" + OUTPUT_EXPRESSION_LIST + ")" \
+    | "{}"
+
+# complete
+FACTOR = PRIMARY + pp.Optional(pp.oneOf(("^", ".^")) + PRIMARY)
+
+# complete
+MUL_OPERATOR = pp.oneOf(("*", "/", ".*", "./"))
+
+# complete
+TERM = FACTOR + pp.ZeroOrMore(MUL_OPERATOR + FACTOR)
+
+# complete
+ADD_OPERATOR = pp.oneOf(("+", "-", ".+", ".-"))
+
+# complete
+ARITHMETIC_EXPRESSION = pp.Optional(
+    ADD_OPERATOR) + TERM + pp.ZeroOrMore(ADD_OPERATOR + TERM)
+
+# complete
+RELATIONAL_OPERATOR = pp.oneOf(("<", "<=", ">", ">=", "==", "<>"))
+
+# complete
+RELATION = ARITHMETIC_EXPRESSION + \
+    pp.Optional(RELATIONAL_OPERATOR + ARITHMETIC_EXPRESSION)
+
+# complete
+LOGICAL_FACTOR = pp.Optional(pp.Keyword("not")) + RELATION
+
+# complete
+LOGICAL_TERM = LOGICAL_FACTOR + \
+    pp.ZeroOrMore(pp.Keyword("and") + LOGICAL_FACTOR)
+
+# complete
+LOGICAL_EXPRESSION = LOGICAL_TERM + \
+    pp.ZeroOrMore(pp.Keyword("or") + LOGICAL_TERM)
+
+# complete
+SIMPLE_EXPRESSION = LOGICAL_EXPRESSION + \
+    pp.Optional(":" + LOGICAL_EXPRESSION +
+                pp.Optional(":" + LOGICAL_EXPRESSION))
+
+# complete
+EXPRESSION <<= (
+    SIMPLE_EXPRESSION |
+    pp.Keyword("if") + EXPRESSION + pp.Keyword("then") + EXPRESSION
+    + pp.ZeroOrMore(pp.Keyword("elseif") +
+                    EXPRESSION + pp.Keyword("then") + EXPRESSION)
+    + pp.Keyword("else") + EXPRESSION
+)
+
+# forward declaration
+STATEMENT = pp.Forward()
+
+# complete
+IF_STATEMENT = pp.Keyword("if") + EXPRESSION \
+    + pp.Keyword("then") + pp.ZeroOrMore(STATEMENT + ";") \
+    + pp.ZeroOrMore(pp.Keyword("elseif") + EXPRESSION +
+                    pp.Keyword("then") + pp.ZeroOrMore(STATEMENT + ";")) \
+    + pp.Optional(pp.Keyword("else") + pp.ZeroOrMore(STATEMENT + ";")) \
+    + pp.Keyword("end") + pp.Keyword("if")
+
+# incomplete
+STATEMENT <<= pp.Keyword("break") \
+    | pp.Keyword("return") \
+    | IF_STATEMENT \
+    | COMPONENT_REFERENCE + ":=" + EXPRESSION
+
+# partial
+EQUATION = (
+    SIMPLE_EXPRESSION + "=" + EXPRESSION
+    | NAME + FUNCTION_CALL_ARGS
+) + COMMENT
+
+MODIFICATION <<= CLASS_MODIFICATION + \
+    pp.Optional('=' + EXPRESSION) | '=' + EXPRESSION
 
 DECLARATION = NAME + pp.Optional(MODIFICATION)
 
-TYPE_PREFIX = (
-    pp.Optional(pp.Keyword("flow") | pp.Keyword("stream"))
-    + pp.Optional(pp.Keyword("discrete") | pp.Keyword("parameter") | pp.Keyword("constant"))
+# complete
+SUBSCRIPT = ":" | EXPRESSION
+
+# complete
+ARRAY_SUBSCRIPTS = "[" + pp.delimitedList(SUBSCRIPT) + "]"
+
+# modified
+TYPE_PREFIX = pp.Group(
+    pp.Optional(pp.Keyword("public") | pp.Keyword("protected"))
+    + pp.Optional(pp.Keyword("flow") | pp.Keyword("stream"))
+    + pp.Optional(pp.Keyword("discrete") |
+                  pp.Keyword("parameter") | pp.Keyword("constant"))
     + pp.Optional(pp.Keyword("input") | pp.Keyword("output"))
 ).setResultsName("type_prefix")
 
-TYPE_SPECIFIER = NAME("type_specifier")
+# complete new
+ENUMERATION_TYPE = pp.Keyword("enumeration") + \
+    "(" + pp.delimitedList(NAME) + ")"
 
+# partial and modified
+TYPE_SPECIFIER = (ENUMERATION_TYPE | NAME).setResultsName("type_specifier")
+
+# partial
+COMPONENT_DECLARATION = DECLARATION + COMMENT
+
+# complete
 COMPONENT_LIST = pp.delimitedList(
-    DECLARATION + pp.Optional(STRING_COMMENT)).setResultsName("component_list")
+    COMPONENT_DECLARATION).setResultsName("component_list")
 
-COMPONENT_CLAUSE = TYPE_PREFIX + TYPE_SPECIFIER + COMPONENT_LIST
+# complete
+COMPONENT_CLAUSE = TYPE_PREFIX + TYPE_SPECIFIER + \
+    pp.Optional(ARRAY_SUBSCRIPTS) + COMPONENT_LIST
 
-ELEMENT = pp.Group(COMPONENT_CLAUSE)
+# partial
+ELEMENT = pp.Group(pp.Optional(pp.Keyword("final")) + COMPONENT_CLAUSE)
 
-ELEMENT_LIST = pp.ZeroOrMore(ELEMENT + pp.Suppress(";")).setResultsName("element_list")
+# complete
+ELEMENT_LIST = pp.ZeroOrMore(
+    ELEMENT + pp.Suppress(";")).setResultsName("element_list")
 
+# complete
+EXPRESSION_LIST = pp.delimitedList(EXPRESSION)
+
+# complete
+EXTERNAL_FUNCTION_CALL = pp.Optional(COMPONENT_REFERENCE + "=") \
+    + IDENT + "(" + pp.Optional(EXPRESSION_LIST) + ")"
+
+# conplete
+ALGORITHM_SECTION = pp.Optional(pp.Keyword("initial")) \
+    + pp.Keyword("algorithm") + pp.ZeroOrMore(STATEMENT + ";")
+
+EQUATION_SECTION = pp.Optional(pp.Keyword("initial")) \
+    + pp.Keyword("equation") + pp.ZeroOrMore(EQUATION + ";")
+
+# complete
+LANGUAGE_SPECIFICATION = pp.dblQuotedString("language_sepcification")
+
+# partial and new
 EXTERNAL_SECTION = pp.Group(
-    pp.Keyword("external") + pp.dblQuotedString("language_sepcification")
-    + NAME + "=" + IDENTIFIER + "(" + pp.Optional(pp.delimitedList(EXPRESSION)) + ")" + ";"
+    pp.Keyword("external") + pp.Optional(LANGUAGE_SPECIFICATION)
+    + pp.Optional(EXTERNAL_FUNCTION_CALL) + ";"
 )
 
-NONPARSED_LINE = pp.Combine(
-    pp.NotAny(pp.Keyword("end") + pp.FollowedBy(NAME)) + pp.SkipTo(";", include=True)
-)
+# partial
+COMPOSITION = ELEMENT_LIST \
+    + pp.ZeroOrMore(ALGORITHM_SECTION) \
+    + pp.ZeroOrMore(EQUATION_SECTION) \
+    + pp.Optional(EXTERNAL_SECTION)
 
-EQUATION_SECTION = pp.Group(
-    pp.Optional(pp.Keyword("initial")) + pp.Keyword("equations") +
-    pp.ZeroOrMore(NONPARSED_LINE)
-)
+# partial and modified
+LONG_CLASS_SPECIFIER = NAME + MULTIPLE_STRING_COMMENT + \
+    COMPOSITION + pp.Keyword("end") + NAME
 
-COMPOSITION = ELEMENT_LIST + pp.Optional(EXTERNAL_SECTION)
+# partial
+CLASS_SPECIFIER = LONG_CLASS_SPECIFIER
 
-CLASS_DEFINITION = pp.Group(
-    pp.Keyword("class") + NAME + pp.Optional(STRING_COMMENT)
-    + COMPOSITION
-    + pp.Keyword("end") + NAME("end_name")
-)
+# complete
+CLASS_PREFIXES = pp.Group(pp.Optional(pp.Keyword("partial")) + (
+    pp.Keyword("class") |
+    pp.Keyword("model") |
+    pp.Optional(pp.Keyword("operator")) + pp.Keyword("record") |
+    pp.Keyword("block") |
+    pp.Optional(pp.Keyword("expendable")) + pp.Keyword("connector") |
+    pp.Keyword("type") |
+    pp.Keyword("package") |
+    pp.Optional(pp.Keyword("pure") | pp.Keyword("impure")) + pp.Optional("operator") + pp.Keyword("function") |
+    pp.Keyword("operator")
+))
 
-FUNCTION_DEFINITION = pp.Group(
-    pp.Optional(pp.Keyword("impure")) + pp.Keyword("function") + NAME
-    + pp.Optional(STRING_COMMENT) + pp.ZeroOrMore(NONPARSED_LINE)
-    + pp.Keyword("end") + NAME("end_name")
-)
+# complete
+CLASS_DEFINITION = pp.Optional(pp.Keyword("encapsulated")) \
+    + CLASS_PREFIXES + CLASS_SPECIFIER
 
-STORED_DEFINITION = pp.ZeroOrMore((FUNCTION_DEFINITION | CLASS_DEFINITION) + pp.Suppress(";"))
+# complete
+STORED_DEFINITION = pp.Optional(pp.Keyword("within") + pp.Optional(NAME) + ";") \
+    + pp.ZeroOrMore(pp.Optional(pp.Keyword("final")) + CLASS_DEFINITION + ";")
 
 
 def run2():
@@ -108,11 +277,9 @@ def run2():
 
 def run3():
     data = """
-function Modelica.Blocks.Tables.Internal.getDerTable2DValue "Derivative of interpolated 2-dim. table defined by matrix"
-  input Modelica.Blocks.Types.ExternalCombiTable2D tableID;
-end Modelica.Blocks.Tables.Internal.getDerTable2DValue;
+  parameter Real battery.constantVoltage.V(quantity = "ElectricPotential", unit = "V", start = 1.0) = battery.V "Value of constant voltage";
     """
-    data = STORED_DEFINITION.parseString(data)
+    data = COMPONENT_CLAUSE.parseString(data)
     print(data)
 
 
@@ -267,5 +434,5 @@ def run():
 
 if __name__ == '__main__':
     # run()
-    # run2()
-    run3()
+    run2()
+    # run3()
