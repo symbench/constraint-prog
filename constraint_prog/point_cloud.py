@@ -30,7 +30,7 @@ from constraint_prog.newton_raphson import newton_raphson
 
 
 class PointCloud:
-    def __init__(self, float_vars: List[str],
+    def __init__(self, float_vars: Optional[List[str]],
                  float_data: Optional[torch.Tensor] = None,
                  string_vars: Optional[List[str]] = None,
                  string_data: Optional[numpy.ndarray] = None):
@@ -39,25 +39,30 @@ class PointCloud:
         The shape of the float_data must be [num_points, len(float_vars)], and
         the shape of the string_data must be [num_points, len(string_vars)].
         """
-        if float_data is None:
-            float_data = torch.empty((0, len(float_vars)), dtype=torch.float32)
 
-        assert float_data.ndim == 2
-        assert float_data.shape[1] == len(float_vars)
+        if not float_vars:
+            assert float_data is None and string_data.ndim == 2
+            self.float_vars = []
+            self.float_data = torch.empty(
+                (string_data.shape[0], 0), dtype=torch.float32)
+        else:
+            assert float_data.ndim == 2
+            assert float_data.shape[1] == len(float_vars)
+            self.float_vars = list(float_vars)
+            self.float_data = float_data
 
-        self.float_vars = list(float_vars)
-        self.float_data = float_data
-
-        if string_vars is None:
+        if not string_vars:
             assert string_data is None
             self.string_vars = []
-            self.string_data = numpy.empty(shape=(float_data.shape[0], 0), dtype=str)
+            self.string_data = numpy.empty(
+                shape=(float_data.shape[0], 0), dtype=str)
         else:
             assert string_data.ndim == 2
-            assert string_data.shape[0] == float_data.shape[0]
             assert string_data.shape[1] == len(string_vars)
             self.string_vars = list(string_vars)
             self.string_data = string_data
+
+        assert self.string_data.shape[0] == self.float_data.shape[0]
 
         # check whether all variables are unique
         total_vars = self.float_vars + self.string_vars
@@ -113,7 +118,8 @@ class PointCloud:
         if isinstance(data, str):
             data = numpy.full((self.num_points, ), data)
         elif isinstance(data, float):
-            data = torch.full((self.num_points, ), data, dtype=torch.float32, device=self.device)
+            data = torch.full((self.num_points, ), data,
+                              dtype=torch.float32, device=self.device)
 
         # https://stackoverflow.com/questions/12569452/how-to-identify-numpy-types-in-python
         if type(data).__module__ == numpy.__name__:
@@ -121,7 +127,8 @@ class PointCloud:
             data = numpy.expand_dims(data, axis=1)
             if var in self.string_vars:
                 idx = self.string_vars.index(var)
-                layers = (self.string_data[:, :idx], data, self.string_data[:, idx+1:])
+                layers = (self.string_data[:, :idx],
+                          data, self.string_data[:, idx+1:])
             else:
                 self.string_vars.append(var)
                 layers = (self.string_data, data)
@@ -179,22 +186,32 @@ class PointCloud:
         """
         ext = os.path.splitext(filename)[1]
         if ext == ".csv":
-            data = numpy.loadtxt(fname=filename, delimiter=delimiter, dtype=str)
+            data = numpy.loadtxt(
+                fname=filename, delimiter=delimiter, dtype=str)
 
             string_vars, string_data, float_vars, float_data = [], [], [], []
             for header, col in zip(data[0, :], data[1:, :].T):
                 try:
                     float_data.append(col.astype(numpy.float32))
                     float_vars.append(header)
-                except ValueError:
+                except ValueError as err:
+                    # print(err)
                     string_data.append(col)
                     string_vars.append(header)
-            float_data = torch.tensor(numpy.array(float_data).T, dtype=torch.float32)
 
-            if len(string_vars) < 1:
+            print("Float variables:", ", ".join(float_vars))
+            print("String variables:", ", ".join(string_vars))
+
+            if not string_vars:
                 string_vars, string_data = None, None
             else:
                 string_data = numpy.array(string_data).transpose()
+
+            if not float_vars:
+                float_vars, float_data = None, None
+            else:
+                float_data = torch.tensor(numpy.array(
+                    float_data).T, dtype=torch.float32)
 
             return PointCloud(float_vars=float_vars,
                               float_data=float_data,
@@ -206,11 +223,13 @@ class PointCloud:
             # Enable backwards compatibility for data files of previous version
             if "sample_vars" in data.files:
                 float_vars = list(data["sample_vars"])
-                float_data = torch.tensor(data["sample_data"], dtype=torch.float32)
+                float_data = torch.tensor(
+                    data["sample_data"], dtype=torch.float32)
                 string_vars, string_data = None, None
             else:
                 float_vars = list(data["float_vars"])
-                float_data = torch.tensor(data["float_data"], dtype=torch.float32)
+                float_data = torch.tensor(
+                    data["float_data"], dtype=torch.float32)
                 string_vars = list(data["string_vars"])
                 string_data = data["string_data"]
 
@@ -299,17 +318,20 @@ class PointCloud:
         else:
             assert stddevs.keys() <= set(self.float_vars)
             stddevs = torch.tensor(
-                [stddevs.get(var, 0.0) * multiplier for var in self.float_vars],
+                [stddevs.get(var, 0.0) *
+                 multiplier for var in self.float_vars],
                 dtype=torch.float32, device=self.device)
 
-        indices = torch.randint(0, self.num_points, (count, ), device=self.device)
+        indices = torch.randint(
+            0, self.num_points, (count, ), device=self.device)
         mutation = torch.randn((count, self.num_float_vars),
                                dtype=torch.float32, device=self.device)
         new_data = self.float_data[indices] + mutation * stddevs
         self.float_data = torch.cat((self.float_data, new_data), dim=0)
 
         new_data = self.string_data[indices.numpy()]
-        self.string_data = numpy.concatenate((self.string_data, new_data), axis=0)
+        self.string_data = numpy.concatenate(
+            (self.string_data, new_data), axis=0)
 
     def to_device(self, device="cpu"):
         """
@@ -364,7 +386,8 @@ class PointCloud:
         if isinstance(resolutions, float):
             resolutions = [resolutions] * self.num_float_vars
         else:
-            resolutions = [resolutions.get(var, 0.0) for var in self.float_vars]
+            resolutions = [resolutions.get(var, 0.0)
+                           for var in self.float_vars]
         return self.prune_close_points(resolutions, keep)
 
     def prune_bounding_box(self, bounds: Dict[str, Tuple[float, float]]) -> 'PointCloud':
@@ -375,7 +398,8 @@ class PointCloud:
         """
         assert bounds.keys() <= set(self.float_vars)
         minimums = torch.tensor(
-            [bounds[var][0] if var in bounds else -math.inf for var in self.float_vars],
+            [bounds[var][0] if var in bounds else -
+                math.inf for var in self.float_vars],
             dtype=torch.float32, device=self.device)
         maximums = torch.tensor(
             [bounds[var][1] if var in bounds else math.inf for var in self.float_vars],
@@ -403,7 +427,8 @@ class PointCloud:
             tolerances = [tolerances for _ in errors.float_vars]
         else:
             tolerances = [tolerances[var] for var in errors.float_vars]
-        tolerances = torch.tensor(tolerances, dtype=torch.float32, device=self.device)
+        tolerances = torch.tensor(
+            tolerances, dtype=torch.float32, device=self.device)
         sel = (errors.float_data.abs() <= tolerances).all(dim=1)
         return PointCloud(float_vars=self.float_vars,
                           float_data=self.float_data[sel],
@@ -486,7 +511,8 @@ class PointCloud:
             test1 = (float_data[:idx, :] <= float_data[idx]).all(dim=1)
             test2 = (float_data[:idx, :] != float_data[idx]).any(dim=1)
             test3 = torch.logical_and(test1, test2).any().item()
-            test4 = (float_data[idx + 1:, :] <= float_data[idx]).all(dim=1).any().item()
+            test4 = (float_data[idx + 1:, :] <=
+                     float_data[idx]).all(dim=1).any().item()
             selected[idx] = not (test3 or test4)
 
         return PointCloud(float_vars=self.float_vars,
@@ -568,7 +594,8 @@ class PointCloud:
         float_vars = list(self.float_vars) + other.float_vars
         float_data = torch.cat((self.float_data, other.float_data), dim=1)
         string_vars = list(self.string_vars) + other.string_vars
-        string_data = numpy.concatenate((self.string_data, other.string_data), axis=1)
+        string_data = numpy.concatenate(
+            (self.string_data, other.string_data), axis=1)
 
         return PointCloud(float_vars=float_vars,
                           float_data=float_data,
@@ -587,7 +614,8 @@ class PointCloud:
             float_vars=self.float_vars,
             float_data=torch.cat((self.float_data, other.float_data), dim=0),
             string_vars=self.string_vars,
-            string_data=numpy.concatenate((self.string_data, other.string_data), axis=0)
+            string_data=numpy.concatenate(
+                (self.string_data, other.string_data), axis=0)
         )
 
     def append(self, row: Dict[str, Union[float, str]]):
@@ -601,7 +629,8 @@ class PointCloud:
 
         string_row = [str(row[var]) for var in self.string_vars]
         string_row = numpy.array([string_row], dtype=str)
-        self.string_data = numpy.concatenate((self.string_data, string_row), axis=0)
+        self.string_data = numpy.concatenate(
+            (self.string_data, string_row), axis=0)
 
     def projection(self, variables: List[str]) -> 'PointCloud':
         """
@@ -676,7 +705,8 @@ class PointFunc(object):
         cloud or tensor and returns the result in the same format.
         """
         if isinstance(points, torch.Tensor):
-            assert points.ndim == 2 and points.shape[1] == len(self.input_names)
+            assert points.ndim == 2 and points.shape[1] == len(
+                self.input_names)
             input_data = points
         else:
             input_data = []
