@@ -52,7 +52,7 @@ class PointCloud:
             self.float_data = float_data
 
         if not string_vars:
-            assert string_data is None
+            assert not string_data
             self.string_vars = []
             self.string_data = numpy.empty(
                 shape=(float_data.shape[0], 0), dtype=str)
