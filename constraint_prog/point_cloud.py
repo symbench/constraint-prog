@@ -741,6 +741,10 @@ def run_pareto_front(args=None):
                         help='selects positive variables')
     parser.add_argument('--neg', type=str, nargs="*", metavar='VAR', default=[],
                         help='selects positive variables')
+    parser.add_argument('--min', type=str, nargs="*", metavar='NV', default=[],
+                        help='prune by minimum values, (name, value) pairs')
+    parser.add_argument('--max', type=str, nargs="*", metavar='NV', default=[],
+                        help='prune by maximum values, (name, value) pairs')
     parser.add_argument('--save', type=str, metavar='FILE',
                         help='save the pruned dataset to this file')
     args = parser.parse_args(args)
@@ -758,29 +762,55 @@ def run_pareto_front(args=None):
     if args.info:
         points.print_info()
 
-    for var in args.pos:
-        if var not in points.float_vars:
-            raise ValueError("invalid variable: " + var)
-    for var in args.neg:
-        if var not in points.float_vars:
-            raise ValueError("invalid variable: " + var)
+    if args.min or args.max:
+        if len(args.max) % 2 != 0:
+            raise ValueError(
+                "you must have an event number of parameters to --max")
 
-    if not args.pos and not args.neg:
-        return
+        if len(args.min) % 2 != 0:
+            raise ValueError(
+                "you must have an event number of parameters to --min")
 
-    dirs = []
-    for var in points.float_vars:
-        if var in args.pos:
-            dirs.append(1.0)
-        elif var in args.neg:
-            dirs.append(-1.0)
-        else:
-            dirs.append(0)
+        bounds = dict()
 
-    print("Pruning to the pareto front, please wait...")
-    points = points.prune_pareto_front(dirs)
+        for idx in range(0, len(args.min), 2):
+            var = args.min[idx]
+            if var not in points.float_vars:
+                raise ValueError("invalid variable: " + var)
+            val = float(args.min[idx + 1])
+            bounds.setdefault(var, [-math.inf, math.inf])[0] = val
 
-    print("After pruning we have", points.num_points, "designs")
+        for idx in range(0, len(args.max), 2):
+            var = args.max[idx]
+            if var not in points.float_vars:
+                raise ValueError("invalid variable: " + var)
+            val = float(args.max[idx + 1])
+            bounds.setdefault(var, [-math.inf, math.inf])[1] = val
+
+        print("Pruning by bounding box, please wait...")
+        points = points.prune_bounding_box(bounds)
+        print("After prooning we have", points.num_points, "designs")
+
+    if args.pos or args.neg:
+        for var in args.pos:
+            if var not in points.float_vars:
+                raise ValueError("invalid variable: " + var)
+        for var in args.neg:
+            if var not in points.float_vars:
+                raise ValueError("invalid variable: " + var)
+
+        dirs = []
+        for var in points.float_vars:
+            if var in args.pos:
+                dirs.append(1.0)
+            elif var in args.neg:
+                dirs.append(-1.0)
+            else:
+                dirs.append(0)
+
+        print("Pruning to the pareto front, please wait...")
+        points = points.prune_pareto_front(dirs)
+        print("After pruning we have", points.num_points, "designs")
 
     if args.save:
         print("Writing", args.save)
