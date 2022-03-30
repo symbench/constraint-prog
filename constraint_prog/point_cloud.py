@@ -213,6 +213,16 @@ class PointCloud:
                 float_data = torch.tensor(numpy.array(
                     float_data).T, dtype=torch.float32)
 
+            count = torch.isnan(float_data).sum().item()
+            if count:
+                print("WARNING: input data countains",
+                      count, "many NAN entries")
+
+            count = torch.isinf(float_data).sum().item()
+            if count:
+                print("WARNING: input data countains",
+                      count, "many INF entries")
+
             return PointCloud(float_vars=float_vars,
                               float_data=float_data,
                               string_vars=string_vars,
@@ -808,6 +818,8 @@ def run_pareto_front(args=None):
             else:
                 dirs.append(0)
 
+        print("Positive variables:", ", ".join(args.pos))
+        print("Negative variables:", ", ".join(args.neg))
         print("Pruning to the pareto front, please wait...")
         points = points.prune_pareto_front(dirs)
         print("After pruning we have", points.num_points, "designs")
