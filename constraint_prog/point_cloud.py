@@ -40,7 +40,7 @@ class PointCloud:
         the shape of the string_data must be [num_points, len(string_vars)].
         """
 
-        if not float_vars:
+        if float_vars is None:
             assert float_data is None and string_data.ndim == 2
             self.float_vars = []
             self.float_data = torch.empty(
@@ -51,8 +51,8 @@ class PointCloud:
             self.float_vars = list(float_vars)
             self.float_data = float_data
 
-        if not string_vars:
-            assert not string_data
+        if string_vars is None:
+            assert string_data is None
             self.string_vars = []
             self.string_data = numpy.empty(
                 shape=(float_data.shape[0], 0), dtype=str)
@@ -98,10 +98,23 @@ class PointCloud:
             result[var] = self.string_data[:, idx]
         return result
 
+    def row(self, index: int) -> Dict[str, Union[float, str]]:
+        """
+        Returns a dictionary containing the given design from the
+        point cloud.
+        """
+        assert 0 <= index < self.num_points
+        result = dict()
+        for idx, var in enumerate(self.float_vars):
+            result[var] = self.float_data[index, idx].item()
+        for idx, var in enumerate(self.string_vars):
+            result[var] = str(self.string_data[index, idx])
+        return result
+
     def __getitem__(self, var: str) -> Union[torch.Tensor, numpy.ndarray]:
         """
         Implements the indexing operator so that the point cloud can be used
-        as a dictionary.
+        as a dictionary returning a full column for the given variable.
         """
         if var in self.string_vars:
             idx = self.string_vars.index(var)
@@ -498,38 +511,18 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data[selected])
 
-    def prune_pareto_front_old(self, directions: List[float]) -> 'PointCloud':
+    def prune_pareto_front2(self, directions: Dict[str, float]) -> 'PointCloud':
         """
-        This is the old and slow implementation of the pareto front pruning
-        algorithm.
+        The same functionality as above, but the directions are specified by
+        a dictionary.
         """
-        assert len(directions) == self.num_float_vars
-
-        # gather data for minimization in all coordinates
-        float_data = []
-        for idx in range(self.num_float_vars):
-            if directions[idx] == 0.0:
-                continue
-            else:
-                data = self.float_data[:, idx]
-                float_data.append(data if directions[idx] < 0.0 else -data)
-        assert float_data
-        float_data = torch.stack(float_data, dim=1)
-
-        # TODO: find a faster algorithm than this quadratic
-        selected = torch.ones(self.num_points, dtype=bool)
-        for idx in range(self.num_points):
-            test1 = (float_data[:idx, :] <= float_data[idx]).all(dim=1)
-            test2 = (float_data[:idx, :] != float_data[idx]).any(dim=1)
-            test3 = torch.logical_and(test1, test2).any().item()
-            test4 = (float_data[idx + 1:, :] <=
-                     float_data[idx]).all(dim=1).any().item()
-            selected[idx] = not (test3 or test4)
-
-        return PointCloud(float_vars=self.float_vars,
-                          float_data=self.float_data[selected],
-                          string_vars=self.string_vars,
-                          string_data=self.string_data[selected])
+        print(self.float_vars)
+        dirs = [0.0] * self.num_float_vars
+        for var, val in directions.items():
+            assert var in self.float_vars
+            idx = self.float_vars.index(var)
+            dirs[idx] = val
+        return self.prune_pareto_front(dirs)
 
     def get_pareto_distance(self, directions: List[float],
                             points: torch.Tensor) -> torch.Tensor:

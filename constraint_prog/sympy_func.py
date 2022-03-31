@@ -105,34 +105,34 @@ class SympyFunc(object):
         return {var: output_data[idx] for idx, var in enumerate(expressions.keys())}
 
     def _eval_equ_as_sub(self, expr: sympy.Expr) -> torch.Tensor:
-        if expr.func == sympy.Eq:
-            assert len(expr.args) == 2
-            value0 = self._eval(expr.args[0])
-            value1 = self._eval(expr.args[1])
-            return torch.sub(value0, value1)
-        elif expr.func == sympy.StrictLessThan or expr.func == sympy.LessThan:
-            assert len(expr.args) == 2
-            value0 = self._eval(expr.args[0])
-            value1 = self._eval(expr.args[1])
-            return torch.sub(value0, value1).clamp_min(0.0)
-        elif expr.func == sympy.StrictGreaterThan or expr.func == sympy.GreaterThan:
-            assert len(expr.args) == 2
-            value0 = self._eval(expr.args[0])
-            value1 = self._eval(expr.args[1])
-            return torch.sub(value0, value1).clamp_max(0.0)
-        else:
-            return self._eval(expr)
+        if isinstance(expr, sympy.Expr):
+            if expr.func == sympy.Eq:
+                assert len(expr.args) == 2
+                value0 = self._eval(expr.args[0])
+                value1 = self._eval(expr.args[1])
+                return torch.sub(value0, value1)
+            elif expr.func == sympy.StrictLessThan or expr.func == sympy.LessThan:
+                assert len(expr.args) == 2
+                value0 = self._eval(expr.args[0])
+                value1 = self._eval(expr.args[1])
+                return torch.sub(value0, value1).clamp_min(0.0)
+            elif expr.func == sympy.StrictGreaterThan or expr.func == sympy.GreaterThan:
+                assert len(expr.args) == 2
+                value0 = self._eval(expr.args[0])
+                value1 = self._eval(expr.args[1])
+                return torch.sub(value0, value1).clamp_max(0.0)
+        return self._eval(expr)
 
     def _eval(self, expr: sympy.Expr) -> torch.Tensor:
         if (isinstance(expr, float) or isinstance(expr, int)
                 or expr.func == sympy.Float
                 or expr.func == sympy.Integer
-                or expr.func == sympy.core.numbers.Rational
-                or expr.func == sympy.core.numbers.NegativeOne
-                or expr.func == sympy.core.numbers.Zero
-                or expr.func == sympy.core.numbers.One
-                or expr.func == sympy.core.numbers.Pi
-                or expr.func == sympy.core.numbers.Half):
+                or expr.func == sympy.numbers.Rational
+                or expr.func == sympy.numbers.NegativeOne
+                or expr.func == sympy.numbers.Zero
+                or expr.func == sympy.numbers.One
+                or expr.func == sympy.numbers.Pi
+                or expr.func == sympy.numbers.Half):
             return torch.full(self._input_shape, float(expr),
                               device=self.device)
         elif expr.func == sympy.Symbol:
