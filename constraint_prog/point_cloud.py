@@ -186,8 +186,9 @@ class PointCloud:
         """
         ext = os.path.splitext(filename)[1]
         if ext == ".csv":
+            # TODO: find a better way to get the dtype and its max size
             data = numpy.loadtxt(
-                fname=filename, delimiter=delimiter, dtype=str)
+                fname=filename, delimiter=delimiter, dtype="<U32")
 
             string_vars, string_data, float_vars, float_data = [], [], [], []
             for header, col in zip(data[0, :], data[1:, :].T):
