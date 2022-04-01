@@ -29,10 +29,10 @@ setup(
         # you might need to use this if you run into CUDA internal error:
         # pip3 install torch==1.8.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
         'torch>=1.5',
-        'matplotlib>=3.5',
-        'sympy',
-        'numpy',
-        'scipy',
+        'matplotlib>=3.3',
+        'sympy>=1.9',
+        'numpy>=1.19',
+        'scipy>=1.5',
     ],
     entry_points={
         'console_scripts': [

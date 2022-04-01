@@ -105,7 +105,7 @@ class SympyFunc(object):
         return {var: output_data[idx] for idx, var in enumerate(expressions.keys())}
 
     def _eval_equ_as_sub(self, expr: sympy.Expr) -> torch.Tensor:
-        if isinstance(expr, sympy.Expr):
+        if isinstance(expr, sympy.core.relational.Relational):
             if expr.func == sympy.Eq:
                 assert len(expr.args) == 2
                 value0 = self._eval(expr.args[0])
@@ -127,12 +127,12 @@ class SympyFunc(object):
         if (isinstance(expr, float) or isinstance(expr, int)
                 or expr.func == sympy.Float
                 or expr.func == sympy.Integer
-                or expr.func == sympy.numbers.Rational
-                or expr.func == sympy.numbers.NegativeOne
-                or expr.func == sympy.numbers.Zero
-                or expr.func == sympy.numbers.One
-                or expr.func == sympy.numbers.Pi
-                or expr.func == sympy.numbers.Half):
+                or expr.func == sympy.core.numbers.Rational
+                or expr.func == sympy.core.numbers.NegativeOne
+                or expr.func == sympy.core.numbers.Zero
+                or expr.func == sympy.core.numbers.One
+                or expr.func == sympy.core.numbers.Pi
+                or expr.func == sympy.core.numbers.Half):
             return torch.full(self._input_shape, float(expr),
                               device=self.device)
         elif expr.func == sympy.Symbol:
