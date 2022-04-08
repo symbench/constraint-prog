@@ -121,7 +121,11 @@ class SympyFunc(object):
                 value0 = self._eval(expr.args[0])
                 value1 = self._eval(expr.args[1])
                 return torch.sub(value0, value1).clamp_max(0.0)
-        return self._eval(expr)
+        elif isinstance(expr, bool):
+            return torch.full(self._input_shape, 0.0 if expr == True else 1.0,
+                              device=self.device)
+
+        raise ValueError("invalid equation expression: " + str(expr))
 
     def _eval(self, expr: sympy.Expr) -> torch.Tensor:
         if (isinstance(expr, float) or isinstance(expr, int)

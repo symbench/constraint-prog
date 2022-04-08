@@ -516,7 +516,6 @@ class PointCloud:
         The same functionality as above, but the directions are specified by
         a dictionary.
         """
-        print(self.float_vars)
         dirs = [0.0] * self.num_float_vars
         for var, val in directions.items():
             assert var in self.float_vars
