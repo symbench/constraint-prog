@@ -649,31 +649,55 @@ class PointCloud:
                           string_vars=self.string_vars,
                           string_data=self.string_data)
 
-    def plot2d(self, var1: str, var2: str, point_size: float = 5.0):
+    def plot2d(self, var1: str, var2: str, point_size: float = 50.0,
+               highlight: List[str] = None):
         """
         Plots the 2d projection of the point cloud to the given coordinates.
         """
         assert var1 in self.float_vars and var2 in self.float_vars
+
+        if highlight:
+            colors = numpy.full(shape=(self.num_points,),
+                                fill_value="blue", dtype=str)
+            for var in self.string_vars:
+                for val in highlight:
+                    colors[self[var] == val] = "red"
+        else:
+            colors = None
+
         fig, ax1 = plt.subplots()
         ax1.scatter(
-            self[var1].numpy(),
-            self[var2].numpy(),
+            x=self[var1].numpy(),
+            y=self[var2].numpy(),
+            c=colors,
             s=point_size)
         ax1.set_xlabel(var1)
         ax1.set_ylabel(var2)
         plt.show()
 
-    def plot3d(self, var1: str, var2: str, var3: str, point_size: float = 5.0):
+    def plot3d(self, var1: str, var2: str, var3: str,
+               point_size: float = 50.0, highlight: List[str] = None):
         """
         Plots the 3d projection of the point cloud to the given coordinates.
         """
         assert var1 in self.float_vars and var2 in self.float_vars and var3 in self.float_vars
+
+        if highlight:
+            colors = numpy.full(shape=(self.num_points,),
+                                fill_value="blue", dtype=str)
+            for var in self.string_vars:
+                for val in highlight:
+                    colors[self[var] == val] = "red"
+        else:
+            colors = None
+
         fig = plt.figure()
         ax1 = fig.add_subplot(projection='3d')
         ax1.scatter(
             self[var1].numpy(),
             self[var2].numpy(),
             self[var3].numpy(),
+            c=colors,
             s=point_size)
         ax1.set_xlabel(var1)
         ax1.set_ylabel(var2)
@@ -833,6 +857,8 @@ def run_plot(args=None):
                         help="prints out the variables of the data")
     parser.add_argument('--var', type=str, nargs="*", metavar='VAR', default=[],
                         help='selects variables to be plotted')
+    parser.add_argument('--highlight', type=str, nargs="*", metavar='NAME', default=[],
+                        help='highlight points that have this string value')
     args = parser.parse_args(args)
 
     points = None
@@ -852,8 +878,9 @@ def run_plot(args=None):
         assert var in points.float_vars
 
     if len(args.var) == 2:
-        points.plot2d(args.var[0], args.var[1])
+        points.plot2d(args.var[0], args.var[1], highlight=args.highlight)
     elif len(args.var) == 3:
-        points.plot3d(args.var[0], args.var[1], args.var[2])
+        points.plot3d(args.var[0], args.var[1], args.var[2],
+                      highlight=args.highlight)
     else:
         print("Invalid number of variables selected")
