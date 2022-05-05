@@ -683,8 +683,8 @@ class PointCloud:
 
         else:
             ax1.scatter(
-                x=self[var1].numpy()[selected],
-                y=self[var2].numpy()[selected],
+                x=self[var1].numpy(),
+                y=self[var2].numpy(),
                 s=point_size)
 
         ax1.set_xlabel(var1)
@@ -725,13 +725,13 @@ class PointCloud:
             cmap="jet",
             s=point_size)
 
-        # ax1.set_xlabel(var1)
-        # ax1.set_ylabel(var2)
-        # ax1.set_zlabel(var3)
-        ax1.set_xlabel("Motor and propeller mass (kg)")
-        ax1.set_ylabel("Eletrical power (W)")
-        ax1.set_zlabel("Propeller thrust (N)")
-        ax1.set_title("Mass vs power vs thrust Pareto-front")
+        ax1.set_xlabel(var1)
+        ax1.set_ylabel(var2)
+        ax1.set_zlabel(var3)
+        # ax1.set_xlabel("Motor and propeller mass (kg)")
+        # ax1.set_ylabel("Eletrical power (W)")
+        # ax1.set_zlabel("Propeller thrust (N)")
+        # ax1.set_title("Mass vs power vs thrust Pareto-front")
 
         plt.show()
 
