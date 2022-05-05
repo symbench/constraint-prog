@@ -162,7 +162,8 @@ class PointCloud:
         print("float shape: {}, string shape: {}".format(
             list(self.float_data.shape), list(self.string_data.shape)))
         print("float names: {}, string names: {}".format(
-            ', '.join(self.float_vars), ', '.join(self.string_vars)))
+            ', '.join(sorted(self.float_vars)),
+            ', '.join(sorted(self.string_vars))))
 
     def save(self, filename: str):
         """
@@ -213,8 +214,8 @@ class PointCloud:
                     string_data.append(col)
                     string_vars.append(header)
 
-            print("Float variables:", ", ".join(float_vars))
-            print("String variables:", ", ".join(string_vars))
+            print("Float variables:", ", ".join(sorted(float_vars)))
+            print("String variables:", ", ".join(sorted(string_vars)))
 
             if not string_vars:
                 string_vars, string_data = None, None
@@ -656,23 +657,45 @@ class PointCloud:
         """
         assert var1 in self.float_vars and var2 in self.float_vars
 
-        if highlight:
-            colors = numpy.full(shape=(self.num_points,),
-                                fill_value="blue", dtype=str)
-            for var in self.string_vars:
-                for val in highlight:
-                    colors[self[var] == val] = "red"
-        else:
-            colors = None
-
         fig, ax1 = plt.subplots()
-        ax1.scatter(
-            x=self[var1].numpy(),
-            y=self[var2].numpy(),
-            c=colors,
-            s=point_size)
+
+        if highlight:
+            displayed = numpy.zeros(shape=(self.num_points,), dtype=bool)
+            for val in highlight:
+                selected = numpy.zeros(shape=(self.num_points,), dtype=bool)
+                for var in self.string_vars:
+                    selected[self[var] == val] = True
+
+                ax1.scatter(
+                    x=self[var1].numpy()[selected],
+                    y=self[var2].numpy()[selected],
+                    label=val,
+                    s=point_size)
+
+                displayed = numpy.logical_or(displayed, selected)
+
+            selected = numpy.logical_not(displayed)
+            ax1.scatter(
+                x=self[var1].numpy()[selected],
+                y=self[var2].numpy()[selected],
+                label="Everything else",
+                s=point_size)
+
+        else:
+            ax1.scatter(
+                x=self[var1].numpy()[selected],
+                y=self[var2].numpy()[selected],
+                s=point_size)
+
         ax1.set_xlabel(var1)
         ax1.set_ylabel(var2)
+        # ax1.set_xlabel("Propeller thrust / eletrical power (N/W)")
+        # ax1.set_ylabel("Motor and propeller mass (kg)")
+        # ax1.set_title("Thrust / power vs mass Pareto-front")
+
+        ax1.grid()
+        ax1.legend()
+
         plt.show()
 
     def plot3d(self, var1: str, var2: str, var3: str,
@@ -697,11 +720,19 @@ class PointCloud:
             self[var1].numpy(),
             self[var2].numpy(),
             self[var3].numpy(),
-            c=colors,
+            # c=colors,
+            c=self[var3].numpy(),
+            cmap="jet",
             s=point_size)
-        ax1.set_xlabel(var1)
-        ax1.set_ylabel(var2)
-        ax1.set_zlabel(var3)
+
+        # ax1.set_xlabel(var1)
+        # ax1.set_ylabel(var2)
+        # ax1.set_zlabel(var3)
+        ax1.set_xlabel("Motor and propeller mass (kg)")
+        ax1.set_ylabel("Eletrical power (W)")
+        ax1.set_zlabel("Propeller thrust (N)")
+        ax1.set_title("Mass vs power vs thrust Pareto-front")
+
         plt.show()
 
 
