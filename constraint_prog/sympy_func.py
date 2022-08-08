@@ -93,7 +93,7 @@ class SympyFunc(object):
                   input_data: Dict[str, torch.Tensor],
                   equs_as_float: bool) -> Dict[str, torch.Tensor]:
         """
-        New version of the evaluate function that uses dictionary.
+        New version of the evaluate function that uses a dictionary.
         """
         input_data = [input_data[name] for name in self.input_names]
         input_data = torch.stack(input_data, dim=-1)
@@ -257,6 +257,12 @@ class SympyFunc(object):
                 b = self._eval(b)
                 data[b] = a[b]
             return data
+        elif isinstance(expr, NeuralFunc):
+            assert len(expr.args) == expr.arity
+            inputs = [self._eval(arg) for arg in expr.args]
+            inputs = torch.stack(inputs, dim=-1)
+            output = expr.network(inputs)
+            return torch.squeeze(output, dim=-1)
         elif isinstance(expr, sympy.Function):
             values = list()
             for a in expr.args:
@@ -296,3 +302,29 @@ class Scaler(object):
                  equs_as_float: bool = True) -> torch.Tensor:
         output_data = self.func(input_data, equs_as_float)
         return output_data * self.scaling
+
+
+class NeuralFunc(sympy.Function):
+    @classmethod
+    def eval(cls, *args):
+        assert len(args) == cls.arity
+        if all([arg.is_Number for arg in args]):
+            inputs = torch.tensor([float(arg) for arg in args])
+            return cls.network(inputs).item()
+
+    def _eval_is_real(self):
+        return True
+
+
+def neural_func(name: str, arity: int, network: torch.nn.Module) -> NeuralFunc:
+    """
+    Creates a new sympy function with the given name and arity
+    implemented using with the provided network.
+    """
+
+    network.eval()  # switch the network to evaluation mode
+
+    return type(name, (NeuralFunc, ), {
+        "arity": arity,
+        "network": network,
+    })

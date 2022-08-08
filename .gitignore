@@ -11,5 +11,4 @@ __pycache__
 *.npz
 *.csv
 *.pdf
-*.pt
 *.DS_Store
