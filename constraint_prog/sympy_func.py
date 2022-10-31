@@ -124,6 +124,8 @@ class SympyFunc(object):
         elif isinstance(expr, bool):
             return torch.full(self._input_shape, 0.0 if expr == True else 1.0,
                               device=self.device)
+        else:
+            return self._eval(expr)
 
         raise ValueError("invalid equation expression: " + str(expr))
 
