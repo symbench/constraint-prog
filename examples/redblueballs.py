@@ -27,7 +27,7 @@ def get_constraints(balls=4):
     for i in range(balls):
         bounds['x{}'.format(i)] = (0.0, 1.0)
         bounds['y{}'.format(i)] = (0.0, 1.0)
-        bounds['r{}'.format(i)] = (0.0, 1.0)
+        bounds['r{}'.format(i)] = (0.001, 1.0)
 
     constraints = dict()
 
@@ -74,14 +74,14 @@ def get_constraints(balls=4):
         by = by + yi * ri ** 2
         bs = bs + ri ** 2
 
-    constraints['cnt1'] = bx * rs <= (rx + 0.01 * rs) * bs
-    constraints['cnt2'] = by * rs <= (ry + 0.01 * rs) * bs
-    constraints['cnt3'] = rx * bs <= (bx + 0.01 * bs) * rs
-    constraints['cnt4'] = ry * bs <= (by + 0.01 * bs) * rs
+    constraints['cnt1'] = bx / bs <= rx / rs + 0.01
+    constraints['cnt2'] = by / bs <= ry / rs + 0.01
+    constraints['cnt3'] = rx / rs <= bx / bs + 0.01
+    constraints['cnt4'] = ry / rs <= by / bs + 0.01
 
     reports = {
-        'ox': bx + rx,
-        'oy': by + ry,
+        'ox': (bx + rx) / (bs + rs),
+        'oy': (by + ry) / (bs + rs),
         'os': bs + rs,
     }
 
@@ -89,7 +89,7 @@ def get_constraints(balls=4):
 
 
 def main():
-    bounds, constraints, reports = get_constraints(4)
+    bounds, constraints, reports = get_constraints(8)
 
     if True:
         for key, val in bounds.items():
@@ -107,8 +107,8 @@ def main():
     num = 10000
     points = PointCloud.generate(bounds, num)
 
-    for _ in range(50):
-        points.add_mutations(0.01, num)
+    for _ in range(10):
+        points.add_mutations(0.1, num)
 
         points = points.newton_raphson(constraints, bounds)
 
@@ -120,9 +120,9 @@ def main():
 
         points = points.prune_close_points2(
             {
-                "ox": 0.005,
-                "oy": 0.005,
-                "os": 0.005,
+                "ox": 0.02,
+                "oy": 0.02,
+                "os": 0.02,
             })
 
         print(points.num_points)
