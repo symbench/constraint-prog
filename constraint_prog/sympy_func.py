@@ -45,7 +45,8 @@ class SympyFunc(object):
         Adds all symbols occuring in the expression to the list of inputs
         of this function.
         """
-        if isinstance(expr, float) or isinstance(expr, int):
+        if isinstance(expr, float) or isinstance(expr, int) \
+                or isinstance(expr, bool):
             return
         if expr.func == sympy.Symbol:
             if expr.name not in self.input_names:
@@ -121,13 +122,12 @@ class SympyFunc(object):
                 value0 = self._eval(expr.args[0])
                 value1 = self._eval(expr.args[1])
                 return torch.sub(value0, value1).clamp_max(0.0)
-        elif isinstance(expr, bool):
-            return torch.full(self._input_shape, 0.0 if expr == True else 1.0,
+        elif isinstance(expr, bool) or isinstance(expr, sympy.logic.boolalg.Boolean):
+            return torch.full(self._input_shape, 0.0 if expr else 1.0,
                               device=self.device)
         else:
+            print("WARNING: evaluation expresson as equation", expr, type(expr))
             return self._eval(expr)
-
-        raise ValueError("invalid equation expression: " + str(expr))
 
     def _eval(self, expr: sympy.Expr) -> torch.Tensor:
         if (isinstance(expr, float) or isinstance(expr, int)
