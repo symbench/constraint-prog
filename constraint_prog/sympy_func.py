@@ -16,6 +16,7 @@
 
 from typing import Callable, Dict, List
 
+import math
 import torch
 import sympy
 from sympy.logic.boolalg import BooleanTrue, BooleanFalse
@@ -106,7 +107,7 @@ class SympyFunc(object):
         return {var: output_data[idx] for idx, var in enumerate(expressions.keys())}
 
     def _eval_equ_as_sub(self, expr: sympy.Expr) -> torch.Tensor:
-        if isinstance(expr, sympy.core.relational.Relational):
+        if isinstance(expr, sympy.Basic):
             if expr.func == sympy.Eq:
                 assert len(expr.args) == 2
                 value0 = self._eval(expr.args[0])
@@ -122,12 +123,15 @@ class SympyFunc(object):
                 value0 = self._eval(expr.args[0])
                 value1 = self._eval(expr.args[1])
                 return torch.sub(value0, value1).clamp_max(0.0)
-        elif isinstance(expr, bool) or isinstance(expr, sympy.logic.boolalg.Boolean):
-            return torch.full(self._input_shape, 0.0 if expr else 1.0,
+            elif expr.func == BooleanTrue or expr.func == BooleanFalse:
+                return torch.full(self._input_shape, 0.0 if bool(expr) else 1.0,
+                                  device=self.device)
+        elif isinstance(expr, bool):
+            return torch.full(self._input_shape, 0.0 if bool(expr) else 1.0,
                               device=self.device)
-        else:
-            print("WARNING: evaluation expresson as equation", expr, type(expr))
-            return self._eval(expr)
+
+        print("WARNING: evaluation expresson as equation", expr, type(expr))
+        return self._eval(expr)
 
     def _eval(self, expr: sympy.Expr) -> torch.Tensor:
         if (isinstance(expr, float) or isinstance(expr, int)
@@ -176,6 +180,11 @@ class SympyFunc(object):
             assert len(expr.args) == 2
             value0 = self._eval(expr.args[0])
             value1 = float(expr.args[1])
+            if value1 != round(value1):
+                negpos = (value0 < 0)
+                if torch.any(negpos):
+                    value0 = value0.clone()
+                    value0[negpos] = math.nan
             return torch.pow(value0, value1)
         elif expr.func == sympy.log:
             assert len(expr.args) == 1
