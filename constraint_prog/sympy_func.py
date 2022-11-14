@@ -16,7 +16,6 @@
 
 from typing import Callable, Dict, List
 
-import math
 import torch
 import sympy
 from sympy.logic.boolalg import BooleanTrue, BooleanFalse
@@ -183,8 +182,9 @@ class SympyFunc(object):
             if value1 != round(value1):
                 negpos = (value0 < 0)
                 if torch.any(negpos):
+                    # TODO: this is not correct
                     value0 = value0.clone()
-                    value0[negpos] = math.nan
+                    value0[negpos] = 0.0
             return torch.pow(value0, value1)
         elif expr.func == sympy.log:
             assert len(expr.args) == 1
