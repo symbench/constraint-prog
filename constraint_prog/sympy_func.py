@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2021, Miklos Maroti
+# Copyright (C) 2021-2022, Miklos Maroti
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -75,7 +75,7 @@ class SympyFunc(object):
         output_data = []
         if equs_as_float:
             for expr in expressions:
-                output_data.append(self._eval_equ_as_sub(expr))
+                output_data.append(self._sat(expr))
         else:
             for expr in expressions:
                 output_data.append(self._eval(expr))
@@ -105,7 +105,13 @@ class SympyFunc(object):
 
         return {var: output_data[idx] for idx, var in enumerate(expressions.keys())}
 
-    def _eval_equ_as_sub(self, expr: sympy.Expr) -> torch.Tensor:
+    def _sat(self, expr: sympy.Expr) -> torch.Tensor:
+        """
+        Takes a contraint expression and evaluates it with the internally stored
+        input data. It returns zero if the constraint is satisfied and nonzero 
+        otherwise. Only relational (logical) expressions should be used, but the
+        returned value is a float tensor.
+        """
         if isinstance(expr, sympy.Basic):
             if expr.func == sympy.Eq:
                 assert len(expr.args) == 2
@@ -125,14 +131,26 @@ class SympyFunc(object):
             elif expr.func == BooleanTrue or expr.func == BooleanFalse:
                 return torch.full(self._input_shape, 0.0 if bool(expr) else 1.0,
                                   device=self.device)
+            elif isinstance(expr, ParetoFunc):
+                assert len(expr.args) == expr.arity
+                inputs = [self._eval(arg) for arg in expr.args]
+                inputs = torch.stack(inputs, dim=-1)
+                output = expr.cloud.get_pareto_distance(
+                    expr.directions, inputs)
+                return torch.squeeze(output, dim=-1)
         elif isinstance(expr, bool):
             return torch.full(self._input_shape, 0.0 if bool(expr) else 1.0,
                               device=self.device)
 
-        print("WARNING: evaluation expresson as equation", expr, type(expr))
+        print("WARNING: an expresson is used as a constraint", expr, type(expr))
         return self._eval(expr)
 
     def _eval(self, expr: sympy.Expr) -> torch.Tensor:
+        """
+        Takes a symbolic expression and evaluates it with the internally stored
+        input data.
+        """
+
         if (isinstance(expr, float) or isinstance(expr, int)
                 or expr.func == sympy.Float
                 or expr.func == sympy.Integer
@@ -274,6 +292,13 @@ class SympyFunc(object):
             inputs = torch.stack(inputs, dim=-1)
             output = expr.network(inputs)
             return torch.squeeze(output, dim=-1)
+        elif isinstance(expr, ParetoFunc):
+            assert len(expr.args) == expr.arity
+            inputs = [self._eval(arg) for arg in expr.args]
+            inputs = torch.stack(inputs, dim=-1)
+            output = expr.cloud.get_pareto_distance(
+                expr.directions, inputs)
+            return torch.squeeze(output, dim=-1)
         elif isinstance(expr, sympy.Function):
             values = list()
             for a in expr.args:
@@ -319,9 +344,12 @@ class NeuralFunc(sympy.Function):
     @classmethod
     def eval(cls, *args):
         assert len(args) == cls.arity
+
+        # the scalar case
         if all([arg.is_Number for arg in args]):
             inputs = torch.tensor([float(arg) for arg in args])
-            return cls.network(inputs).item()
+            result = cls.network(inputs)
+            return result.item()
 
     def _eval_is_real(self):
         return True
@@ -338,4 +366,34 @@ def neural_func(name: str, arity: int, network: torch.nn.Module) -> NeuralFunc:
     return type(name, (NeuralFunc, ), {
         "arity": arity,
         "network": network,
+    })
+
+
+class ParetoFunc(sympy.Function):
+    @classmethod
+    def eval(cls, *args):
+        assert len(args) == cls.arity
+
+        # the scalar case
+        if all([arg.is_Number for arg in args]):
+            inputs = torch.tensor([float(arg) for arg in args])
+            result = cls.cloud.get_pareto_distance(cls.directions, inputs)
+            return result.item()
+
+    def _eval_is_real(self):
+        return True
+
+
+def pareto_func(name: str, cloud: 'PointCloud',  # type: ignore
+                directions: List[float]) -> ParetoFunc:
+    """
+    Creates a new sympy function with the given name that returns zero if the
+    input argument is within the dominated region of a pareto front, and a
+    positive distance if the input argument is not dominated.
+    """
+
+    return type(name, (ParetoFunc, ), {
+        "cloud": cloud,
+        "arity": cloud.num_float_vars,
+        "directions": directions,
     })
