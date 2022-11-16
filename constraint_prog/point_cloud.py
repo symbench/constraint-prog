@@ -694,7 +694,7 @@ class PointCloud:
         # ax1.set_title("Thrust / power vs mass Pareto-front")
 
         ax1.grid()
-        ax1.legend()
+        # ax1.legend()
 
         plt.show()
 
