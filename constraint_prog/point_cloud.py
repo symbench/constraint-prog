@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2021, Miklos Maroti, Zsolt Vizi
+# Copyright (C) 2021-2022, Miklos Maroti, Zsolt Vizi
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,11 +14,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from typing import Dict, List, Union, Tuple, Optional
+
 from collections import Counter
 import csv
+import json
 import math
 import os
-from typing import Dict, List, Union, Tuple, Optional
 
 import matplotlib.pyplot as plt
 import numpy
@@ -110,6 +112,18 @@ class PointCloud:
         for idx, var in enumerate(self.string_vars):
             result[var] = str(self.string_data[index, idx])
         return result
+
+    def get_bounds(self) -> Dict[str, Tuple[float, float]]:
+        """
+        Returns a dictionary containing the bounds of elements in each row.
+        """
+        bounds = dict()
+        for idx, var in enumerate(self.float_vars):
+            bounds[var] = (
+                torch.min(self.float_data[:, idx]).item(),
+                torch.max(self.float_data[:, idx]).item(),
+            )
+        return bounds
 
     def __getitem__(self, var: str) -> Union[torch.Tensor, numpy.ndarray]:
         """
@@ -806,6 +820,8 @@ def run_pareto_front(args=None):
                         help='prune by maximum values, (name, value) pairs')
     parser.add_argument('--save', type=str, metavar='FILE',
                         help='save the pruned dataset to this file')
+    parser.add_argument('--print', action='store_true',
+                        help="prints the output to the console")
     args = parser.parse_args(args)
 
     points = None
@@ -824,11 +840,11 @@ def run_pareto_front(args=None):
     if args.min or args.max:
         if len(args.max) % 2 != 0:
             raise ValueError(
-                "you must have an event number of parameters to --max")
+                "you must have an even number of parameters to --max")
 
         if len(args.min) % 2 != 0:
             raise ValueError(
-                "you must have an event number of parameters to --min")
+                "you must have an even number of parameters to --min")
 
         bounds = dict()
 
@@ -876,6 +892,11 @@ def run_pareto_front(args=None):
     if args.save:
         print("Writing", args.save)
         points.save(args.save)
+
+    if args.print:
+        for idx in range(points.num_points):
+            row = points.row(idx)
+            print(json.dumps(row, indent=2))
 
 
 def run_plot(args=None):
