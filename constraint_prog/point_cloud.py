@@ -194,7 +194,7 @@ class PointCloud:
             raise ValueError("invalid filename extension")
 
     @staticmethod
-    def load(filename: str, delimiter=',') -> 'PointCloud':
+    def load(filename: str, delimiter=',', silent=False) -> 'PointCloud':
         """
         Loads the data from the given csv or npz file.
         """
@@ -214,8 +214,9 @@ class PointCloud:
                     string_data.append(col)
                     string_vars.append(header)
 
-            print("Float variables:", ", ".join(sorted(float_vars)))
-            print("String variables:", ", ".join(sorted(string_vars)))
+            if not silent:
+                print("Float variables:", ", ".join(sorted(float_vars)))
+                print("String variables:", ", ".join(sorted(string_vars)))
 
             if not string_vars:
                 string_vars, string_data = None, None
@@ -847,7 +848,7 @@ def run_pareto_front(args=None):
 
         print("Pruning by bounding box, please wait...")
         points = points.prune_bounding_box(bounds)
-        print("After prooning we have", points.num_points, "designs")
+        print("After pruning we have", points.num_points, "designs")
 
     if args.pos or args.neg:
         for var in args.pos:
