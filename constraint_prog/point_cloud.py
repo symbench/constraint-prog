@@ -539,6 +539,14 @@ class PointCloud:
             dirs[idx] = val
         return self.prune_pareto_front(dirs)
 
+    def prune_single_objective(self, objective: Tuple[str, float], keep: int) -> 'PointCloud':
+        """
+        Assumes a single objective optimization problem where the given variable 
+        needs to be maximized (+1) or minimized (-1) and we keep at most the given
+        number of points.
+        """
+        pass
+
     def get_pareto_distance(self, directions: List[float],
                             points: torch.Tensor) -> torch.Tensor:
         """
