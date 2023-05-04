@@ -545,7 +545,20 @@ class PointCloud:
         needs to be maximized (+1) or minimized (-1) and we keep at most the given
         number of points.
         """
-        pass
+        assert len(objective) == 2
+        (var, val) = objective
+        assert var in self.float_vars
+        var_col = self.float_vars.index(var)
+        assert var_col
+        float_data = self.float_data[:, var_col]
+        sorted, idx =  torch.sort(float_data, descending = True if val > 0 else False)
+        selected = torch.zeros(self.num_points, dtype=bool)
+        for id in idx[:keep]:
+            selected[id] = True
+        return PointCloud(float_vars=self.float_vars,
+                          float_data=self.float_data[selected],
+                          string_vars=self.string_vars,
+                          string_data=self.string_data[selected])
 
     def get_pareto_distance(self, directions: List[float],
                             points: torch.Tensor) -> torch.Tensor:
